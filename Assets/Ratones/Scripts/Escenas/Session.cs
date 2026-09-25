@@ -23,6 +23,7 @@ namespace Ratones.Basic
         public int AuraColor { get; private set; }
         public AudioSource Music { get; private set; }
         public AudioSource Effects { get; private set; }
+        public float LatencyMilliseconds { get { return client == null ? 0 : client.LatencyMilliseconds; } }
         GameServer server;
         GameClient client;
         LanBeacon beacon;
@@ -61,6 +62,9 @@ namespace Ratones.Basic
             PlayerName = Simulation.CleanName(name); KeyColor = Simulation.ColorIndex(key); AuraColor = Simulation.ColorIndex(aura);
             PlayerPrefs.SetString("RF2.Name", PlayerName); PlayerPrefs.SetInt("RF2.Key", KeyColor); PlayerPrefs.SetInt("RF2.Aura", AuraColor);
             PlayerPrefs.Save();
+            // Actualiza también el perfil de la sala sin volver a conectarse.
+            if (server != null) server.Simulation.UpdateProfile(LocalId, PlayerName, KeyColor, AuraColor);
+            if (client != null) client.UpdateProfile(PlayerName, KeyColor, AuraColor);
         }
         public void ApplyVolume()
         {
@@ -123,6 +127,12 @@ namespace Ratones.Basic
             value = Vector2.ClampMagnitude(value, 1);
             if (server != null) server.Simulation.Move(LocalId, value.x, value.y);
             if (client != null) client.Move(value.x, value.y);
+        }
+        public bool TryPredictedPosition(out Position position)
+        {
+            position = default(Position);
+            if (client == null || !client.Ready || !client.Prediction.Ready || State == null || State.Phase != Phase.Playing) return false;
+            position = client.Prediction.Position; return true;
         }
         public void UseSpeed() { Use(Power.Speed); }
         public void UseFreeze() { Use(Power.Freeze); }

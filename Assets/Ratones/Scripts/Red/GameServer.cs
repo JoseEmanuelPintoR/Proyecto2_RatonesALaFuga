@@ -9,7 +9,7 @@ namespace Ratones.Basic
 {
     public sealed class GameServer : IDisposable
     {
-        sealed class Peer { public SocketConnection Socket; public int Id = -1; public float Age, Silence, Closing = -1; }
+        sealed class Peer { public SocketConnection Socket; public int Id = -1, WorldAck = -1; public float Age, Silence, Closing = -1; }
         public readonly Simulation Simulation;
         public readonly string Code;
         public readonly int HostId;
@@ -63,8 +63,15 @@ namespace Ratones.Basic
             snapshotClock += dt;
             if (snapshotClock >= 1f / Rules.SnapshotRate)
             {
-                snapshotClock = 0; string state = Protocol.Snapshot(Simulation.State);
-                foreach (Peer peer in peers) if (peer.Id >= 0 && peer.Closing < 0) peer.Socket.Send(state, true);
+                snapshotClock %= 1f / Rules.SnapshotRate;
+                string full = null, movement = null;
+                foreach (Peer peer in peers) if (peer.Id >= 0 && peer.Closing < 0)
+                {
+                    bool sendItems = peer.WorldAck != Simulation.State.WorldRevision;
+                    if (sendItems && full == null) full = Protocol.Snapshot(Simulation.State);
+                    if (!sendItems && movement == null) movement = Protocol.Snapshot(Simulation.State, false);
+                    peer.Socket.Send(sendItems ? full : movement, true);
+                }
             }
         }
         void Message(Peer peer, string line)
@@ -77,10 +84,24 @@ namespace Ratones.Basic
                 { Reject(peer, "Código o versión del juego incorrectos."); return; }
                 int id = Simulation.Join(Protocol.Decode(p[3]), int.Parse(p[4]), int.Parse(p[5]));
                 if (id < 0) { Reject(peer, "La sala está llena o la partida ya empezó."); return; }
-                peer.Id = id; peer.Socket.Send("WELCOME|" + id); return;
+                peer.Id = id; Simulation.State.Player(id).Remote = true;
+                peer.Socket.Send("WELCOME|" + id); return;
             }
-            if (p[0] == "PING") { peer.Socket.Send("PONG"); return; }
-            if (p[0] == "MOVE" && p.Length == 3) Simulation.Move(peer.Id, Protocol.Float(p[1]), Protocol.Float(p[2]));
+            if (p[0] == "PING") { peer.Socket.Send(p.Length == 2 ? "PONG|" + p[1] : "PONG"); return; }
+            if (p[0] == "ACK_WORLD" && p.Length == 2)
+            {
+                int revision = int.Parse(p[1]);
+                if (revision >= 0 && revision <= Simulation.State.WorldRevision) peer.WorldAck = Math.Max(peer.WorldAck,revision);
+                return;
+            }
+            if (p[0] == "PROFILE" && p.Length == 4)
+            {
+                // La conexión identifica al jugador; no se acepta un ID enviado por el cliente.
+                Simulation.UpdateProfile(peer.Id, Protocol.Decode(p[1]), int.Parse(p[2]), int.Parse(p[3]));
+                return;
+            }
+            if (p[0] == "MOVE" && p.Length == 5)
+                Simulation.ReceiveInput(peer.Id, int.Parse(p[1]), int.Parse(p[2]), Protocol.Float(p[3]), Protocol.Float(p[4]));
             if (p[0] == "POWER" && p.Length == 2)
             { int power = int.Parse(p[1]); if (power == 1 || power == 2) Simulation.Use(peer.Id, (Power)power); }
         }

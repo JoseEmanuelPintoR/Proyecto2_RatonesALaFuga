@@ -12,7 +12,10 @@ namespace Ratones.Basic
         readonly Dictionary<int, GameObject> items = new Dictionary<int, GameObject>();
         int round = -1;
         void Start()
-        { if (!Session.Ensure().Connected) Session.Ensure().Go("Conexion"); }
+        {
+            if (!Session.Ensure().Connected) { Session.Ensure().Go("Conexion"); return; }
+            ArenaView.Ensure();
+        }
         void Update()
         {
             Session session = Session.Ensure(); State state = session.State;
@@ -25,14 +28,15 @@ namespace Ratones.Basic
                 foreach (Item item in state.Items)
                 {
                     GameObject prefab = item.Kind == ItemKind.Queso ? Queso : item.Kind == ItemKind.Fresa ? Fresa : item.Kind == ItemKind.Pie ? Pie : item.Kind == ItemKind.Chocolate ? Chocolate : Trampa;
-                    items[item.Id] = Instantiate(prefab, new Vector3(item.Position.X, .6f, item.Position.Z), Quaternion.identity, transform);
+                    items[item.Id] = Instantiate(prefab, ItemPosition(item), Quaternion.identity, transform);
                 }
             }
             foreach (Player p in state.Players)
             {
                 PlayerView view;
                 if (!players.TryGetValue(p.Id, out view)) { view = Instantiate(PlayerPrefab, transform); view.name = p.Name; players[p.Id] = view; }
-                view.Show(p);
+                Position predicted;
+                view.Show(p, p.Id == session.LocalId && session.TryPredictedPosition(out predicted) ? (Position?)predicted : null);
                 if (p.Id == session.LocalId) CameraFollow.Target = view.transform;
             }
             foreach (Item item in state.Items)
@@ -40,8 +44,11 @@ namespace Ratones.Basic
                 GameObject model;
                 if (!items.TryGetValue(item.Id, out model)) continue;
                 model.SetActive(item.Active);
+                model.transform.position = ItemPosition(item);
                 model.transform.rotation = Quaternion.Euler(0, Time.time * 35 + item.Id * 17, 0);
             }
         }
+        static Vector3 ItemPosition(Item item)
+        { return new Vector3(item.Position.X, ArenaLayout.HeightAt(item.Position) + .8f, item.Position.Z); }
     }
 }

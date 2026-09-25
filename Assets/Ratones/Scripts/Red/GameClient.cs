@@ -2,6 +2,7 @@ using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
+using System.Diagnostics;
 
 namespace Ratones.Basic
 {
@@ -16,6 +17,10 @@ namespace Ratones.Basic
         public volatile string Status = "Buscando sala…";
         public int Id { get; private set; } = -1;
         public State State { get; private set; }
+        public readonly LocalPrediction Prediction = new LocalPrediction();
+        public float LatencyMilliseconds { get; private set; }
+        int worldAck = -1, pingSequence;
+        long pingStarted;
         float silence, heartbeat;
         public bool Ready { get { return Id >= 0 && State != null; } }
         public GameClient(string code, string name, int key, int aura, IPEndPoint directEndpoint = null)
@@ -52,7 +57,8 @@ namespace Ratones.Basic
         {
             SocketConnection s; lock (gate) s = socket; if (s == null) return;
             silence += dt; heartbeat += dt;
-            if (heartbeat >= 1) { heartbeat = 0; s.Send("PING"); }
+            if (heartbeat >= 1)
+            { heartbeat = 0; pingStarted = Stopwatch.GetTimestamp(); s.Send("PING|" + (++pingSequence)); }
             string line; int count = 0;
             while (count++ < 128 && s.TryRead(out line))
             {
@@ -60,7 +66,15 @@ namespace Ratones.Basic
                 try
                 {
                     if (line.StartsWith("WELCOME|")) Id = int.Parse(line.Split('|')[1]);
-                    else if (line.StartsWith("S|")) State = Protocol.Parse(line);
+                    else if (line.StartsWith("S|"))
+                    {
+                        State = Protocol.Parse(line, State);
+                        Prediction.Reconcile(State.Player(Id), State.Round, State.Phase == Phase.Playing);
+                        if (worldAck != State.WorldRevision)
+                        { worldAck = State.WorldRevision; s.Send("ACK_WORLD|" + worldAck); }
+                    }
+                    else if (line == "PONG|" + pingSequence)
+                        LatencyMilliseconds = (float)((Stopwatch.GetTimestamp() - pingStarted) * 1000.0 / Stopwatch.Frequency);
                     else if (line.StartsWith("ERROR|")) Error = Protocol.Decode(line.Split('|')[1]);
                 }
                 catch { Error = "La sala usa otra versión del juego."; }
@@ -68,9 +82,20 @@ namespace Ratones.Basic
             if (Error == null && (!s.Alive || silence > 8)) Error = "Se perdió la conexión con el anfitrión.";
         }
         public void Move(float x, float z)
-        { lock (gate) if (socket != null && Ready) socket.Send("MOVE|" + Protocol.Num(x) + "|" + Protocol.Num(z), true); }
+        {
+            lock (gate) if (socket != null && Ready && State.Phase == Phase.Playing && Prediction.Ready)
+            {
+                InputFrame frame = Prediction.Push(x,z);
+                socket.Send("MOVE|" + State.Round + "|" + frame.Sequence + "|" + Protocol.Num(frame.X) + "|" + Protocol.Num(frame.Z));
+            }
+        }
         public void Use(Power power)
         { lock (gate) if (socket != null && Ready) socket.Send("POWER|" + (int)power); }
+        public void UpdateProfile(string name, int key, int aura)
+        {
+            lock (gate) if (socket != null && Ready)
+                socket.Send("PROFILE|" + Protocol.Encode(Simulation.CleanName(name)) + "|" + Simulation.ColorIndex(key) + "|" + Simulation.ColorIndex(aura));
+        }
         public void Dispose()
         {
             cancellation.Cancel();
