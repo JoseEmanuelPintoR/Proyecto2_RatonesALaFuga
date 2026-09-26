@@ -44,6 +44,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 429f9437283d617a322bfac411632660, type: 3}
   m_Name: ''
   m_EditorClassIdentifier: ''
-  MusicClip: {fileID: 0}
+  MenuMusic: {fileID: 8300000, guid: 440d30a7e7dbd514da005a1ebb8797da, type: 3}
+  GameMusic: {fileID: 8300000, guid: d11d33c69a38b774fac6a32e5a123a47, type: 3}
+  PodiumMusic: {fileID: 8300000, guid: 5e19e3febe407a64fbfb65e4f29cdb14, type: 3}
   CollectClip: {fileID: 0}
   PowerClip: {fileID: 0}

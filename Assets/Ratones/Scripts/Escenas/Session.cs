@@ -8,7 +8,7 @@ namespace Ratones.Basic
     public sealed class Session : MonoBehaviour
     {
         public static Session Instance { get; private set; }
-        public AudioClip MusicClip;
+        public AudioClip MenuMusic, GameMusic, PodiumMusic;
         public AudioClip CollectClip;
         public AudioClip PowerClip;
         public State State { get; private set; }
@@ -53,9 +53,18 @@ namespace Ratones.Basic
             PlayerName = PlayerPrefs.GetString("RF2.Name", "Jugador");
             KeyColor = Simulation.ColorIndex(PlayerPrefs.GetInt("RF2.Key", 5));
             AuraColor = Simulation.ColorIndex(PlayerPrefs.GetInt("RF2.Aura", 3));
-            Music = gameObject.AddComponent<AudioSource>(); Music.loop = true; Music.clip = MusicClip; Music.spatialBlend = 0;
+            Music = gameObject.AddComponent<AudioSource>(); Music.loop = true; Music.spatialBlend = 0;
             Effects = gameObject.AddComponent<AudioSource>(); Effects.spatialBlend = 0;
-            ApplyVolume(); if (MusicClip != null) Music.Play(); loaded = true;
+            ApplyVolume(); SceneManager.sceneLoaded += OnSceneLoaded;
+            PlayMusicFor(SceneManager.GetActiveScene().name); loaded = true;
+        }
+        void OnSceneLoaded(Scene scene, LoadSceneMode mode) { PlayMusicFor(scene.name); }
+        // Juego y Resultados tienen su propia canción; el resto de escenas comparte la del menú.
+        void PlayMusicFor(string scene)
+        {
+            AudioClip clip = scene == "Juego" ? GameMusic : scene == "Resultados" ? PodiumMusic : MenuMusic;
+            if (clip == null || (Music.clip == clip && Music.isPlaying)) return;
+            Music.clip = clip; Music.Play();
         }
         public void SaveProfile(string name, int key, int aura)
         {
@@ -173,6 +182,6 @@ namespace Ratones.Basic
             if (paused && loaded && (server != null || client != null))
             { Stop(); Status = "Saliste de la sala al poner el juego en segundo plano."; Go("Conexion"); }
         }
-        void OnDestroy() { if (Instance == this) { Stop(); Instance = null; } }
+        void OnDestroy() { if (Instance == this) { SceneManager.sceneLoaded -= OnSceneLoaded; Stop(); Instance = null; } }
     }
 }

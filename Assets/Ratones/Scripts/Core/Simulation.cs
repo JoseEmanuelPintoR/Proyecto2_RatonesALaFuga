@@ -17,7 +17,10 @@ namespace Ratones.Basic
         public int Join(string name, int key, int aura)
         {
             if (State.Phase != Phase.Lobby || Connected >= Rules.MaxPlayers) return -1;
-            var p = new Player { Id = nextId++, Name = CleanName(name), KeyColor = ColorIndex(key), AuraColor = ColorIndex(aura) };
+            key = ColorIndex(key); aura = ColorIndex(aura);
+            // Si la combinación ya está en uso se cambia la llave por la siguiente libre y se conserva el aura.
+            for (int i = 0; i < Rules.ColorCount && ComboTaken(-1, key, aura); i++) key = (key + 1) % Rules.ColorCount;
+            var p = new Player { Id = nextId++, Name = CleanName(name), KeyColor = key, AuraColor = aura };
             p.Slot = Enumerable.Range(0, 4).First(i => !State.Players.Any(q => q.Connected && q.Slot == i));
             State.Players.Add(p); if (State.HostId < 0) State.HostId = p.Id;
             return p.Id;
@@ -34,9 +37,14 @@ namespace Ratones.Basic
             Player player = State.Player(id);
             if (State.Phase != Phase.Lobby || player == null || !player.Connected) return false;
             player.Name = CleanName(name);
-            player.KeyColor = ColorIndex(key); player.AuraColor = ColorIndex(aura);
+            key = ColorIndex(key); aura = ColorIndex(aura);
+            if (ComboTaken(id, key, aura)) return false;
+            player.KeyColor = key; player.AuraColor = aura;
             return true;
         }
+        // Dos jugadores pueden repetir llave o aura, pero no las dos a la vez.
+        public bool ComboTaken(int exceptId, int key, int aura)
+        { return State.Players.Any(p => p.Connected && p.Id != exceptId && p.KeyColor == key && p.AuraColor == aura); }
         public void Leave(int id)
         {
             Player p = State.Player(id); if (p == null) return;

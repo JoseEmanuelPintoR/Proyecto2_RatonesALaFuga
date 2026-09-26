@@ -45,6 +45,16 @@ static class Program
             s.Leave(2); int id=s.Join("E",4,5); Check(s.State.Player(id).Slot == 2, "reutiliza puesto");
             Check(s.Start(0) && s.Join("F",0,0) < 0, "cerrar ingreso durante partida");
         });
+        Test("perfil: llave y aura no se repiten juntas", () => {
+            var s = new Simulation(1); int a=s.Join("A",0,0), b=s.Join("B",0,0), c=s.Join("C",1,0), d=s.Join("D",0,5);
+            Check(s.State.Player(b).KeyColor == 1 && s.State.Player(b).AuraColor == 0, "ajusta la llave");
+            Check(s.State.Player(c).KeyColor == 2 && s.State.Player(c).AuraColor == 0, "salta llaves ocupadas");
+            Check(s.State.Player(d).KeyColor == 0 && s.State.Player(d).AuraColor == 5, "misma llave con otra aura");
+            Check(!s.UpdateProfile(b,"B2",0,0) && s.State.Player(b).KeyColor == 1 && s.State.Player(b).Name == "B2", "rechaza combinación ocupada");
+            Check(s.UpdateProfile(b,"B",0,1) && s.State.Player(b).AuraColor == 1, "acepta combinación libre");
+            Check(s.UpdateProfile(a,"A",0,0), "puede guardar su propia combinación");
+            s.Leave(a); Check(s.UpdateProfile(b,"B",0,0), "libera la combinación al salir");
+        });
         Test("generación: 50 alimentos, 8 poderes y posiciones separadas", () => {
             for (int seed=0; seed<40; seed++) {
                 var s=new Simulation(seed); for(int i=0;i<4;i++)s.Join("P",0,0); s.Start(0);
