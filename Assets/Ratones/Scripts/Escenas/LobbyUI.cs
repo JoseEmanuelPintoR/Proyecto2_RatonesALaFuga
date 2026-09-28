@@ -11,6 +11,9 @@ namespace Ratones.Basic
         public Image[] Auras, Keys;
         public Button StartButton;
         public Button PersonalizeButton;
+        public Sprite[] AuraSprites;
+        Sprite[] emptyAuras;
+        void Awake() { emptyAuras = Auras.Select(a => a != null ? a.sprite : null).ToArray(); }
         void Start()
         {
             if (!Session.Ensure().Connected) { Session.Ensure().Go("Conexion"); return; }
@@ -80,7 +83,8 @@ namespace Ratones.Basic
             {
                 Player p = state.Players.FirstOrDefault(x => x.Connected && x.Slot == i);
                 Names[i].text = p == null ? "Esperando…" : p.Name + (p.Id == session.LocalId ? " (tú)" : "") + (p.Id == state.HostId ? "\nAnfitrión" : "");
-                Auras[i].color = p == null ? Color.gray : Palette.Colors[p.AuraColor];
+                if (p == null) { Auras[i].sprite = emptyAuras[i]; Auras[i].color = Color.gray; }
+                else if (!Palette.SetAura(Auras[i], AuraSprites, p.AuraColor)) Auras[i].color = Palette.Colors[p.AuraColor];
                 Keys[i].color = p == null ? Color.gray : Palette.Colors[p.KeyColor];
             }
             int count = state.Players.Count(p => p.Connected);

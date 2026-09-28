@@ -10,7 +10,12 @@ namespace Ratones.Basic
         public Image KeyPreview, AuraPreview;
         public Text Selected;
         public MousePreview Preview;
+        public Sprite[] AuraSprites;
         readonly Button[] colorButtons = new Button[Rules.ColorCount];
+        // Aspecto original de los botones de color (círculo teñido) para el modo LLAVE.
+        readonly Sprite[] colorSprites = new Sprite[Rules.ColorCount];
+        readonly Color[] colorTints = new Color[Rules.ColorCount];
+        Sprite auraCircle;
         int key, aura;
         bool editingAura;
         string warning = "";
@@ -27,8 +32,12 @@ namespace Ratones.Basic
                 {
                     int index;
                     if (button.name.StartsWith("Color") && int.TryParse(button.name.Substring(5), out index) && index >= 0 && index < colorButtons.Length)
+                    {
                         colorButtons[index] = button;
+                        if (button.image != null) { colorSprites[index] = button.image.sprite; colorTints[index] = button.image.color; }
+                    }
                 }
+            auraCircle = AuraPreview.sprite;
             Refresh();
         }
         void Update() { RefreshTaken(); }
@@ -42,7 +51,15 @@ namespace Ratones.Basic
         }
         void Refresh()
         {
-            KeyPreview.color = Palette.Colors[key]; AuraPreview.color = Palette.Colors[aura];
+            KeyPreview.color = Palette.Colors[key];
+            if (!Palette.SetAura(AuraPreview, AuraSprites, aura)) { AuraPreview.sprite = auraCircle; AuraPreview.color = Palette.Colors[aura]; }
+            // En modo AURA los botones muestran la imagen de cada aura; en modo LLAVE, el círculo de color.
+            for (int i = 0; i < colorButtons.Length; i++)
+            {
+                Image image = colorButtons[i] != null ? colorButtons[i].image : null;
+                if (image == null) continue;
+                if (!editingAura || !Palette.SetAura(image, AuraSprites, i)) { image.sprite = colorSprites[i]; image.color = colorTints[i]; }
+            }
             Selected.text = warning != "" ? warning : "Color para: " + (editingAura ? "AURA" : "LLAVE");
             if (Preview != null) Preview.Show(key, aura);
             RefreshTaken();

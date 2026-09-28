@@ -9,12 +9,38 @@ namespace Ratones.Basic
         // Una textura del ratón por color de llave, en el mismo orden que Palette.Colors.
         public Material[] KeyMaterials;
         public Renderer Aura;
+        // Fuente del nombre sobre el ratón ("J1:LAURA"); la asigna Ratones/UI nueva en el prefab.
+        public Font NameFont;
+        public float NameHeight = 1.6f;
         Material auraMaterial;
         MaterialPropertyBlock tint;
+        TextMesh nameLabel;
         int shownKey = -1;
         bool first = true;
         void Awake()
         { if (Aura != null) auraMaterial = Aura.material; tint = new MaterialPropertyBlock(); }
+        // Solo en partida: la vista de Personalizar usa el mismo prefab sin nombre.
+        void SetName(string text, Color color)
+        {
+            if (nameLabel == null)
+            {
+                var go = new GameObject("Nombre");
+                go.transform.SetParent(transform, false);
+                go.transform.localPosition = new Vector3(0, NameHeight, 0);
+                nameLabel = go.AddComponent<TextMesh>();
+                nameLabel.anchor = TextAnchor.MiddleCenter; nameLabel.alignment = TextAlignment.Center;
+                nameLabel.fontSize = 64; nameLabel.characterSize = .05f;
+                if (NameFont != null) { nameLabel.font = NameFont; go.GetComponent<MeshRenderer>().sharedMaterial = NameFont.material; }
+            }
+            nameLabel.text = text; nameLabel.color = color;
+        }
+        Camera viewer;
+        void LateUpdate()
+        {
+            if (nameLabel == null) return;
+            if (viewer == null) viewer = Camera.main != null ? Camera.main : FindAnyObjectByType<Camera>();
+            if (viewer != null) nameLabel.transform.rotation = viewer.transform.rotation;
+        }
         public void Show(Player player, Position? predicted = null)
         {
             Position position = predicted ?? player.Position;
@@ -27,6 +53,7 @@ namespace Ratones.Basic
             transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.Euler(0, player.Angle, 0), Time.unscaledDeltaTime * 16);
             first = false;
             ShowColors(player.KeyColor, player.AuraColor, player.FreezeLeft > 0, player.BoostLeft > 0);
+            SetName("J" + (player.Slot + 1) + ":" + (player.Name ?? "").ToUpperInvariant(), Palette.Colors[player.AuraColor]);
             if (Visual != null) Visual.localPosition = new Vector3(0, moving && player.FreezeLeft <= 0 ? Mathf.Abs(Mathf.Sin(Time.time * 14)) * .12f : 0, 0);
             gameObject.SetActive(player.Connected);
         }

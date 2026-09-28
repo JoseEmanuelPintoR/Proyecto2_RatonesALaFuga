@@ -67,6 +67,8 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 9528070826179d147b7e243344a4a776, type: 2}
   - {fileID: 2100000, guid: 1683f8ddb8abe1148b2612aded37e032, type: 2}
   Aura: {fileID: 1016}
+  NameFont: {fileID: 12800000, guid: e2dc4386188386e4d9742a72a59ae943, type: 3}
+  NameHeight: 1.6
 --- !u!1 &1003
 GameObject:
   m_ObjectHideFlags: 0

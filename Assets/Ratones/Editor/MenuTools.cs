@@ -47,7 +47,7 @@ namespace Ratones.Basic.Editor
             Scene scene = Open("Conexion"); if (!scene.IsValid()) return;
             NavigationUI nav = Find<NavigationUI>(scene);
             if (nav == null || nav.Code == null) { Debug.LogError("Falta NavigationUI o su campo Code en esta escena."); return; }
-            // Primero ToggleJoin: si ya se preparó antes, el botón Entrar también llama a Join.
+            // Primero ToggleJoin: en escenas preparadas antes, el viejo botón Entrar también llama a Join.
             Button join = FindButton(scene, nav, nameof(NavigationUI.ToggleJoin), "Unirse") ?? FindButton(scene, nav, nameof(NavigationUI.Join), "Unirse");
             if (join == null) { Debug.LogError("No se encontró el botón Unirse."); return; }
             Undo.SetCurrentGroupName("Preparar desplegable Unirse"); int group = Undo.GetCurrentGroup();
@@ -76,38 +76,30 @@ namespace Ratones.Basic.Editor
                     }
             if (code.parent != panel.transform) Undo.SetTransformParent(code, panel.transform, "Mover código");
 
+            // Ya no hay botón Entrar: Unirse abre el código y, con código escrito, entra (NavigationUI.ToggleJoin).
             Transform existing = panel.transform.Find("Entrar");
-            Button enter = existing != null ? existing.GetComponent<Button>() : null;
-            if (enter == null)
-            {
-                GameObject copy = Object.Instantiate(join.gameObject, panel.transform, false);
-                Undo.RegisterCreatedObjectUndo(copy, "Crear botón Entrar");
-                copy.name = "Entrar"; enter = copy.GetComponent<Button>(); enter.onClick = new Button.ButtonClickedEvent();
-                Text text = copy.GetComponentInChildren<Text>(true); if (text != null) text.text = "Entrar";
-                UnityEventTools.AddPersistentListener(enter.onClick, nav.Join);
-            }
+            if (existing != null) Undo.DestroyObjectImmediate(existing.gameObject);
 
             // Posiciones con el desplegable abierto (centrado en pantalla, referencia 1280x720).
-            // Cerrado, NavigationUI baja Crear partida, Unirse y el estado 65 px para dejarlos centrados.
-            Place(nav.CreateButton != null ? (RectTransform)nav.CreateButton.transform : null, 120);
-            Place((RectTransform)join.transform, 10);
-            Place(codeLabel, -67);
-            Place(code, -115);
-            Place((RectTransform)enter.transform, -200);
+            // Cerrado, Crear partida baja 90 px y Unirse sube 35 px para quedar juntos y centrados.
+            Place(nav.CreateButton != null ? (RectTransform)nav.CreateButton.transform : null, 150);
+            Place(codeLabel, 55);
+            Place(code, 5);
+            Place((RectTransform)join.transform, -95);
             Place(nav.Status != null ? nav.Status.rectTransform : null, -300);
             var slide = new System.Collections.Generic.List<RectTransform>();
-            if (nav.CreateButton != null) slide.Add((RectTransform)nav.CreateButton.transform);
-            slide.Add((RectTransform)join.transform); slide.Add((RectTransform)panel.transform);
-            if (nav.Status != null) slide.Add(nav.Status.rectTransform);
+            var offsets = new System.Collections.Generic.List<float>();
+            if (nav.CreateButton != null) { slide.Add((RectTransform)nav.CreateButton.transform); offsets.Add(-90); }
+            slide.Add((RectTransform)join.transform); offsets.Add(35);
 
             Undo.RecordObject(join, "Unirse abre el desplegable");
             for (int i = join.onClick.GetPersistentEventCount() - 1; i >= 0; i--)
                 if (join.onClick.GetPersistentTarget(i) == nav) UnityEventTools.RemovePersistentListener(join.onClick, i);
             UnityEventTools.AddPersistentListener(join.onClick, nav.ToggleJoin);
-            Undo.RecordObject(nav, "Conectar desplegable"); nav.JoinPanel = panel; nav.JoinButton = enter;
-            nav.Slide = slide.ToArray(); nav.ClosedOffset = -65;
-            EditorUtility.SetDirty(join); EditorUtility.SetDirty(enter);
-            Finish(scene, group, panel, "Desplegable Unirse listo. Guarda Conexion con Ctrl+S. En Play, Unirse muestra u oculta el código y el botón Entrar.");
+            Undo.RecordObject(nav, "Conectar desplegable"); nav.JoinPanel = panel; nav.JoinButton = join;
+            nav.Slide = slide.ToArray(); nav.ClosedOffsets = offsets.ToArray();
+            EditorUtility.SetDirty(join);
+            Finish(scene, group, panel, "Desplegable Unirse listo. Guarda Conexion con Ctrl+S. En Play, Unirse muestra el código y, con un código escrito, entra a la sala.");
         }
 
         static void Place(RectTransform rect, float y)

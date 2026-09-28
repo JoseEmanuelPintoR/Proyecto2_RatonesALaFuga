@@ -12,6 +12,8 @@ namespace Ratones.Basic
         public GameObject[] Podiums;
         public Image[] Colors;
         public Text Fourth;
+        public GameObject FourthMedal;
+        public Sprite[] AuraSprites;
         void Start()
         {
             Session session = Session.Ensure(); State state = session.State;
@@ -27,7 +29,7 @@ namespace Ratones.Basic
                 bool tie = players.Count(q => q.Score == p.Score) > 1;
                 Names[i].text = p.Name; Scores[i].text = p.Score + " puntos";
                 Places[i].text = place + ".º" + (tie ? " · empate" : "");
-                Colors[i].color = Palette.Colors[p.AuraColor];
+                if (!Palette.SetAura(Colors[i], AuraSprites, p.AuraColor)) Colors[i].color = Palette.Colors[p.AuraColor];
             }
             if (players.Count == 4)
             {
@@ -35,6 +37,7 @@ namespace Ratones.Basic
                 Fourth.text = place + ".º  " + p.Name + "  ·  " + p.Score + " puntos";
             }
             else Fourth.text = "";
+            if (FourthMedal != null) FourthMedal.SetActive(players.Count == 4);
         }
         public void Lobby() { Session.Ensure().BackToLobby(); }
         public void Menu() { Session.Ensure().LeaveToMenu(); }

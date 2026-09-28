@@ -15,6 +15,8 @@ namespace Ratones.Basic
         // cerrado quedan ClosedOffset más abajo, centrados sin el código.
         public RectTransform[] Slide;
         public float ClosedOffset = -65;
+        // Desplazamiento por elemento de Slide cuando está cerrado; si falta, se usa ClosedOffset.
+        public float[] ClosedOffsets;
         Vector2[] openPositions;
         CanvasGroup panelGroup;
         bool joinOpen;
@@ -50,7 +52,11 @@ namespace Ratones.Basic
             float t = Mathf.SmoothStep(0, 1, open);
             if (openPositions != null)
                 for (int i = 0; i < Slide.Length; i++)
-                    if (Slide[i] != null) Slide[i].anchoredPosition = openPositions[i] + new Vector2(0, ClosedOffset * (1 - t));
+                    if (Slide[i] != null)
+                    {
+                        float offset = ClosedOffsets != null && i < ClosedOffsets.Length ? ClosedOffsets[i] : ClosedOffset;
+                        Slide[i].anchoredPosition = openPositions[i] + new Vector2(0, offset * (1 - t));
+                    }
             JoinPanel.SetActive(open > 0);
             panelGroup.alpha = t; panelGroup.interactable = panelGroup.blocksRaycasts = joinOpen;
         }
@@ -60,7 +66,13 @@ namespace Ratones.Basic
         public void MainMenu() { Session.LeaveToMenu(); }
         public void Quit() { Session.Quit(); }
         public void Host() { Session.CreateRoom(); }
-        public void ToggleJoin() { joinOpen = !joinOpen; }
+        // Unirse hace las dos cosas: abre el código y, si ya hay uno escrito, entra a la sala.
+        public void ToggleJoin()
+        {
+            if (!joinOpen) { joinOpen = true; return; }
+            if (Code != null && !string.IsNullOrWhiteSpace(Code.text)) Join();
+            else joinOpen = false;
+        }
         public void Join() { if (Code != null) Session.JoinRoom(Code.text); }
     }
 }
