@@ -46,7 +46,6 @@ namespace Ratones.Basic.Editor
                         foreach (var b in root.GetComponentsInChildren<Button>(true))
                         {
                             buttons++;
-                            if (b.GetComponent<DirectionButton>() != null) continue; // Pulsación sostenida por IPointerDown/Up.
                             errors += CheckEvent(name, b.name, b.onClick);
                         }
                         foreach (var s in root.GetComponentsInChildren<Slider>(true)) errors += CheckEvent(name, s.name, s.onValueChanged);

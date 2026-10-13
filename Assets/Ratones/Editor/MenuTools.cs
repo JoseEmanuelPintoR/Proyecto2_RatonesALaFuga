@@ -80,17 +80,18 @@ namespace Ratones.Basic.Editor
             Transform existing = panel.transform.Find("Entrar");
             if (existing != null) Undo.DestroyObjectImmediate(existing.gameObject);
 
-            // Posiciones con el desplegable abierto (centrado en pantalla, referencia 1280x720).
-            // Cerrado, Crear partida baja 90 px y Unirse sube 35 px para quedar juntos y centrados.
-            Place(nav.CreateButton != null ? (RectTransform)nav.CreateButton.transform : null, 150);
-            Place(codeLabel, 55);
-            Place(code, 5);
-            Place((RectTransform)join.transform, -95);
-            Place(nav.Status != null ? nav.Status.rectTransform : null, -300);
+            // Posiciones con el desplegable abierto (centrado en pantalla, referencia 1280x720):
+            // Crear partida, Unirse y debajo el código. Cerrado, Crear partida baja 40 px y Unirse 45 px
+            // para quedar juntos y centrados.
+            Place(nav.CreateButton != null ? (RectTransform)nav.CreateButton.transform : null, 110);
+            Place((RectTransform)join.transform, -25);
+            Place(codeLabel, -125);
+            Place(code, -175);
+            Place(nav.Status != null ? nav.Status.rectTransform : null, -290);
             var slide = new System.Collections.Generic.List<RectTransform>();
             var offsets = new System.Collections.Generic.List<float>();
-            if (nav.CreateButton != null) { slide.Add((RectTransform)nav.CreateButton.transform); offsets.Add(-90); }
-            slide.Add((RectTransform)join.transform); offsets.Add(35);
+            if (nav.CreateButton != null) { slide.Add((RectTransform)nav.CreateButton.transform); offsets.Add(-40); }
+            slide.Add((RectTransform)join.transform); offsets.Add(-45);
 
             Undo.RecordObject(join, "Unirse abre el desplegable");
             for (int i = join.onClick.GetPersistentEventCount() - 1; i >= 0; i--)

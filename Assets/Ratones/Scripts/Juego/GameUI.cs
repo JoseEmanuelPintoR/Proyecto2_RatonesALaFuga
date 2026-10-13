@@ -6,7 +6,8 @@ namespace Ratones.Basic
 {
     public sealed class GameUI : MonoBehaviour
     {
-        public DirectionButton[] Directions;
+        // Joystick de movimiento: el queso es la perilla.
+        public Joystick Stick;
         public Camera GameCamera;
         public Text[] PlayerLabels;
         // Aura de cada jugador dentro de su cuadro en la barra de participantes (mismo orden que PlayerLabels).
@@ -35,20 +36,18 @@ namespace Ratones.Basic
             }
             int seconds = Mathf.CeilToInt(state.TimeLeft);
             Timer.text = (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
-            // El puntaje propio ya está en la barra; OwnScore queda oculto en la escena.
             OwnScore.text = "Puntos: " + own.Score + "\nAlimentos: " + own.Collected;
             Inventory.text = own.FreezeLeft > 0 ? "Detenido: " + own.FreezeLeft.ToString("0.0") + " s" : "";
             Countdown.text = state.Phase == Phase.Countdown ? Mathf.CeilToInt(state.CountdownLeft).ToString() : "";
             bool canAct = state.Phase == Phase.Playing && own.FreezeLeft <= 0 && !dialogOpen;
             SpeedButton.interactable = canAct && own.Has(Power.Speed) && own.BoostLeft <= 0;
             FreezeButton.interactable = canAct && own.Has(Power.Freeze);
-            // Los poderes se reconocen por su imagen (atenuada sin carga); solo se muestra el tiempo de velocidad.
-            SpeedLabel.text = own.BoostLeft > 0 ? own.BoostLeft.ToString("0.0") + " s" : "";
-            FreezeLabel.text = "";
+            SpeedLabel.text = own.BoostLeft > 0 ? "VELOCIDAD\n" + own.BoostLeft.ToString("0.0") + " s" : "VELOCIDAD\n" + (own.Has(Power.Speed) ? "Usar" : "Sin carga");
+            FreezeLabel.text = "DETENER\n" + (own.Has(Power.Freeze) ? "Usar" : "Sin carga");
             Vector2 input = Vector2.zero;
             if (state.Phase == Phase.Playing && !dialogOpen && Application.isFocused)
             {
-                foreach (DirectionButton direction in Directions) if (direction.Held) input += direction.Direction;
+                if (Stick != null) input += Stick.Value;
                 if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) input.y += 1;
                 if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) input.y -= 1;
                 if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) input.x -= 1;
@@ -56,6 +55,7 @@ namespace Ratones.Basic
                 if (Input.GetKeyDown(KeyCode.E)) session.UseSpeed(); if (Input.GetKeyDown(KeyCode.Q)) session.UseFreeze();
                 if (Input.GetKeyDown(KeyCode.Escape)) ShowExit();
             }
+            input = Vector2.ClampMagnitude(input, 1);
             Vector3 right = GameCamera.transform.right; right.y = 0; right.Normalize();
             Vector3 forward = GameCamera.transform.forward; forward.y = 0; forward.Normalize();
             Vector3 world = right * input.x + forward * input.y;
@@ -66,7 +66,7 @@ namespace Ratones.Basic
         public void Speed() { Session.Ensure().UseSpeed(); }
         public void Freeze() { Session.Ensure().UseFreeze(); }
         public void ShowExit()
-        { dialogOpen = true; foreach (DirectionButton d in Directions) d.Clear(); Session.Ensure().Move(Vector2.zero); ExitDialog.SetActive(true); }
+        { dialogOpen = true; if (Stick != null) Stick.Clear(); Session.Ensure().Move(Vector2.zero); ExitDialog.SetActive(true); }
         public void CancelExit() { dialogOpen = false; ExitDialog.SetActive(false); }
         public void ConfirmExit() { Session.Ensure().LeaveToMenu(); }
         void OnDisable() { if (Session.Instance != null) Session.Instance.Move(Vector2.zero); }

@@ -8,11 +8,13 @@ namespace Ratones.Basic
         public RectTransform Viewport;
         public Vector3 Offset = new Vector3(30, 45, -30);
         public float SmoothTime = .12f;
+        // Tamaño de la cámara ortográfica: más chico = más cerca del ratón.
+        public float Size = 14;
         Camera view;
         Vector3 velocity;
         bool first = true;
         readonly Vector3[] corners = new Vector3[4];
-        void Awake() { view = GetComponent<Camera>(); }
+        void Awake() { view = GetComponent<Camera>(); if (view.orthographic) view.orthographicSize = Size; }
         void LateUpdate()
         {
             if (Viewport != null && Screen.width > 0 && Screen.height > 0)

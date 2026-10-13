@@ -3,7 +3,9 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Ratones.Basic.Editor
 {
@@ -11,22 +13,86 @@ namespace Ratones.Basic.Editor
     public static class ModelTools
     {
         const string Models = "Assets/Ratones/Arte/Modelos/";
-        // Prefab, FBX y medida del lado más largo en metros (igual que el primitivo anterior).
-        static readonly (string item, string fbx, float size)[] Items =
+        // Prefab, FBX, medida del lado más largo en metros y color del aura en el suelo.
+        // Chocolate (velocidad) y trampa (detener) usan el tinte que toma el ratón con ese poder.
+        static readonly (string item, string fbx, float size, Color aura)[] Items =
         {
-            ("Queso", "UVS QUESO.fbx", 1.5f),
-            ("Fresa", "Fresa UVS.fbx", 1.6f),
-            ("Pie", "Ponque_UVS.fbx", 2),
-            ("Chocolate", "Chocolate_UVS.fbx", 2),
-            ("Trampa", "Trampa_UVS.fbx", 2),
+            ("Queso", "UVS QUESO.fbx", 2.2f, new Color(1, .85f, .1f)),
+            ("Fresa", "Fresa UVS.fbx", 2.4f, new Color(.95f, .15f, .2f)),
+            ("Pie", "Ponque_UVS.fbx", 3, new Color(1, .45f, .75f)),
+            ("Chocolate", "Chocolate_UVS.fbx", 3, Color.cyan),
+            ("Trampa", "Trampa_UVS.fbx", 3, new Color(.45f, .45f, 1)),
         };
+        // Altura del modelo sobre el suelo y diámetro del aura respecto al tamaño del item.
+        const float ItemLift = .15f, AuraScale = 1.25f;
 
         [MenuItem("Ratones/Preparar modelos de items")]
         public static void PrepareAll()
         {
             if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de preparar los modelos."); return; }
-            foreach (var entry in Items) Prepare(entry.item, Models + entry.fbx, entry.size);
+            foreach (var entry in Items) Prepare(entry.item, Models + entry.fbx, entry.size, entry.aura);
             AssetDatabase.SaveAssets();
+        }
+
+        // Giro (grados) y ajuste de altura de la cocina si su piso no queda justo en y = 0.
+        const float CocinaYaw = 0, CocinaAltura = 0;
+
+        // Pone el modelo de la cocina como escenario de la arena. Solo es visual: las colisiones
+        // siguen siendo las de ArenaLayout (RampasYObstaculos y los límites).
+        [MenuItem("Ratones/Preparar cocina")]
+        public static void PrepareKitchen()
+        {
+            if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de preparar la cocina."); return; }
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.name != "Juego") { Debug.LogWarning("Abre la escena Juego antes de preparar la cocina."); return; }
+            string fbx = Models + "Cocina/Cocina_UVS.fbx";
+            var importer = AssetImporter.GetAtPath(fbx) as ModelImporter;
+            if (importer == null) { Debug.LogError("No se encontró " + fbx); return; }
+            if (importer.importCameras || importer.importLights || importer.importAnimation || importer.animationType != ModelImporterAnimationType.None)
+            {
+                importer.importCameras = false; importer.importLights = false; importer.importAnimation = false;
+                importer.animationType = ModelImporterAnimationType.None; importer.SaveAndReimport();
+            }
+            Undo.SetCurrentGroupName("Preparar cocina"); int group = Undo.GetCurrentGroup();
+            foreach (GameObject old in scene.GetRootGameObjects().Where(g => g.name == "Cocina").ToArray()) Undo.DestroyObjectImmediate(old);
+
+            var kitchen = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(fbx), scene);
+            kitchen.name = "Cocina";
+            Undo.RegisterCreatedObjectUndo(kitchen, "Preparar cocina");
+            Renderer[] renderers = kitchen.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) { Debug.LogError("Cocina_UVS.fbx no tiene mallas."); return; }
+            string[] slots = renderers.SelectMany(r => r.sharedMaterials).Where(m => m != null).Select(m => m.name).Distinct().ToArray();
+            var materials = new Dictionary<string, Material>();
+            foreach (string slot in slots)
+                materials[slot] = CreateMaterial(slots.Length == 1 ? "CocinaModelo" : "CocinaModelo_" + Clean(slot).Trim('_'), "Cocina/Cocina_UVS_" + Clean(slot) + "_", 2048);
+            foreach (Renderer r in renderers)
+            {
+                Material[] shared = r.sharedMaterials;
+                for (int i = 0; i < shared.Length; i++)
+                { Material m; if (shared[i] != null && materials.TryGetValue(shared[i].name, out m) && m != null) shared[i] = m; }
+                r.sharedMaterials = shared;
+            }
+
+            // Escala uniforme para que el lado más largo del piso mida lo mismo que la arena, centrada y con la base en el suelo.
+            kitchen.transform.rotation = Quaternion.Euler(0, CocinaYaw, 0) * kitchen.transform.rotation;
+            Bounds bounds = WorldBounds(renderers);
+            float longest = Mathf.Max(bounds.size.x, bounds.size.z);
+            if (longest > 0) kitchen.transform.localScale *= Rules.ArenaSize / longest;
+            bounds = WorldBounds(renderers);
+            kitchen.transform.position -= new Vector3(bounds.center.x, bounds.min.y - CocinaAltura, bounds.center.z);
+            foreach (Renderer r in renderers) r.gameObject.isStatic = true;
+
+            // El suelo gris queda solo como colisión.
+            Transform plane = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<Transform>(true)).FirstOrDefault(t => t.name == "Plano100x100");
+            MeshRenderer floor = plane != null ? plane.GetComponent<MeshRenderer>() : null;
+            if (floor != null) { Undo.RecordObject(floor, "Ocultar suelo"); floor.enabled = false; }
+            else Debug.LogWarning("No se encontró Plano100x100; el suelo gris sigue visible.");
+
+            Undo.CollapseUndoOperations(group);
+            EditorSceneManager.MarkSceneDirty(scene); AssetDatabase.SaveAssets();
+            Selection.activeGameObject = kitchen;
+            bounds = WorldBounds(renderers);
+            Debug.Log("Listo: cocina de " + bounds.size.x.ToString("0.0") + " x " + bounds.size.y.ToString("0.0") + " x " + bounds.size.z.ToString("0.0") + " m. Guarda Juego con Ctrl+S. Si queda girada o hundida, cambia CocinaYaw o CocinaAltura en ModelTools.cs.");
         }
 
         // Sufijo de la textura del ratón para cada color de Palette.Colors (rojo, azul, verde, rosa, naranja,
@@ -92,7 +158,7 @@ namespace Ratones.Basic.Editor
             AssetDatabase.SaveAssets();
         }
 
-        static void Prepare(string item, string fbx, float size)
+        static void Prepare(string item, string fbx, float size, Color auraColor)
         {
             var importer = AssetImporter.GetAtPath(fbx) as ModelImporter;
             if (importer == null) { Debug.LogError("No se encontró " + fbx); return; }
@@ -127,16 +193,45 @@ namespace Ratones.Basic.Editor
                     r.sharedMaterials = shared; r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; r.receiveShadows = false;
                 }
 
-                // Escala uniforme y centrado para que gire sobre su centro sin deformarse.
+                // Escala uniforme, centrado en X/Z para que gire sobre su eje y apoyado sobre la raíz (el suelo).
                 Bounds bounds = WorldBounds(renderers);
                 float longest = Mathf.Max(bounds.size.x, Mathf.Max(bounds.size.y, bounds.size.z));
                 if (longest > 0) model.transform.localScale *= size / longest;
                 bounds = WorldBounds(renderers);
-                model.transform.localPosition -= bounds.center - root.transform.position;
+                Vector3 origin = root.transform.position;
+                model.transform.localPosition -= new Vector3(bounds.center.x - origin.x, bounds.min.y - origin.y - ItemLift, bounds.center.z - origin.z);
+                Aura(root.transform, item, size, auraColor);
                 PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
                 Debug.Log("Listo: " + item + " usa su modelo (" + bounds.size.x.ToString("0.00") + " x " + bounds.size.y.ToString("0.00") + " x " + bounds.size.z.ToString("0.00") + " m).");
             }
             finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+
+        // Disco plano de color en el suelo bajo el item, como el aura del ratón (cilindro aplastado).
+        static void Aura(Transform root, string item, float size, Color color)
+        {
+            Transform previous = root.Find("Aura");
+            if (previous != null) Object.DestroyImmediate(previous.gameObject);
+            var aura = new GameObject("Aura", typeof(MeshFilter), typeof(MeshRenderer));
+            aura.transform.SetParent(root, false);
+            aura.GetComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Cylinder.fbx");
+            aura.transform.localPosition = new Vector3(0, .04f, 0);
+            aura.transform.localScale = new Vector3(size * AuraScale, .03f, size * AuraScale);
+            var renderer = aura.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = AuraMaterial(item, color);
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows = false;
+        }
+        static Material AuraMaterial(string item, Color color)
+        {
+            string path = "Assets/Ratones/Materiales/Aura" + item + ".mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) { material = new Material(Shader.Find("Standard")); AssetDatabase.CreateAsset(material, path); }
+            // Emisión del mismo color para que brille aunque esté a la sombra.
+            material.color = color; material.SetFloat("_Glossiness", 0);
+            material.EnableKeyword("_EMISSION"); material.SetColor("_EmissionColor", color * .6f);
+            material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            EditorUtility.SetDirty(material);
+            return material;
         }
 
         // Painter nombra las texturas "<FBX>_<material>_<mapa>.png" cambiando los caracteres raros por "_".
@@ -148,15 +243,15 @@ namespace Ratones.Basic.Editor
             return null;
         }
 
-        static Material CreateMaterial(string name, string prefix)
+        static Material CreateMaterial(string name, string prefix, int maxSize = 1024)
         {
             string albedoPath = Find(prefix, "BaseMap", "AlbedoTransparency", "BaseColor");
             if (albedoPath == null) { Debug.LogWarning("No se encontraron texturas " + Models + prefix + "*.png"); return null; }
             string maskPath = Find(prefix, "MaskMap");
             string glossPath = maskPath ?? Find(prefix, "MetallicSmoothness") ?? CombineMetallicRoughness(prefix);
-            Texture2D albedo = LoadTexture(albedoPath, TextureImporterType.Default, true);
-            Texture2D gloss = LoadTexture(glossPath, TextureImporterType.Default, false);
-            Texture2D normal = LoadTexture(Find(prefix, "Normal"), TextureImporterType.NormalMap, false);
+            Texture2D albedo = LoadTexture(albedoPath, TextureImporterType.Default, true, maxSize);
+            Texture2D gloss = LoadTexture(glossPath, TextureImporterType.Default, false, maxSize);
+            Texture2D normal = LoadTexture(Find(prefix, "Normal"), TextureImporterType.NormalMap, false, maxSize);
             return BuildMaterial(name, albedo, gloss, maskPath != null, normal);
         }
 
@@ -201,12 +296,12 @@ namespace Ratones.Basic.Editor
             return path;
         }
 
-        static Texture2D LoadTexture(string path, TextureImporterType type, bool srgb)
+        static Texture2D LoadTexture(string path, TextureImporterType type, bool srgb, int maxSize = 1024)
         {
             if (path == null) return null;
             var importer = AssetImporter.GetAtPath(path) as TextureImporter;
-            if (importer != null && (importer.textureType != type || importer.sRGBTexture != srgb || importer.maxTextureSize != 1024))
-            { importer.textureType = type; importer.sRGBTexture = srgb; importer.maxTextureSize = 1024; importer.SaveAndReimport(); }
+            if (importer != null && (importer.textureType != type || importer.sRGBTexture != srgb || importer.maxTextureSize != maxSize))
+            { importer.textureType = type; importer.sRGBTexture = srgb; importer.maxTextureSize = maxSize; importer.SaveAndReimport(); }
             return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
         }
 

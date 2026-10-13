@@ -48,7 +48,8 @@ namespace Ratones.Basic
                 model.transform.rotation = Quaternion.Euler(0, Time.time * 35 + item.Id * 17, 0);
             }
         }
+        // La raíz del prefab va en el suelo: el modelo se apoya encima y el aura queda pegada al piso.
         static Vector3 ItemPosition(Item item)
-        { return new Vector3(item.Position.X, ArenaLayout.HeightAt(item.Position) + .8f, item.Position.Z); }
+        { return new Vector3(item.Position.X, ArenaLayout.HeightAt(item.Position), item.Position.Z); }
     }
 }

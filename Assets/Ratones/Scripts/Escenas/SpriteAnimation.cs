@@ -10,6 +10,8 @@ namespace Ratones.Basic
         public Sprite[] Frames;
         public float Fps = 20;
         public bool Loop;
+        // Veces que se reproduce antes de ocultarse (si no es Loop).
+        public int Repeats = 3;
         Image image;
         float time;
         void OnEnable()
@@ -22,11 +24,8 @@ namespace Ratones.Basic
             if (Frames == null || Frames.Length == 0 || Fps <= 0) return;
             time += Time.unscaledDeltaTime;
             int frame = Mathf.FloorToInt(time * Fps);
-            if (frame >= Frames.Length)
-            {
-                if (!Loop) { gameObject.SetActive(false); return; }
-                frame %= Frames.Length;
-            }
+            if (!Loop && frame >= Frames.Length * Mathf.Max(1, Repeats)) { gameObject.SetActive(false); return; }
+            frame %= Frames.Length;
             image.sprite = Frames[frame];
         }
     }

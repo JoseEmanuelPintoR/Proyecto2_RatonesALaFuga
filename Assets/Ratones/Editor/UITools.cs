@@ -18,6 +18,7 @@ namespace Ratones.Basic.Editor
         const string PlayerPrefab = "Assets/Ratones/Prefabs/JugadorBasico.prefab";
         // Velocidad de los cuadros de Confeti: el GIF original usa 40 ms por cuadro.
         const float ConfettiFps = 25;
+        const int ConfettiRepeats = 3;
         static readonly string[] SceneNames = { "MenuInicio", "Conexion", "Lobby", "Personalizar", "Configuracion", "Juego", "Resultados" };
         // Mismo orden que Palette.Colors.
         static readonly string[] AuraNames = { "ROJA", "AZUL", "VERDE", "ROSADA", "NARANJA", "AMARILLA", "NEGRA", "BLANCA", "MORADA", "CAFE", "TURQUESA", "MENTA" };
@@ -120,7 +121,7 @@ namespace Ratones.Basic.Editor
             var game = Find<GameUI>();
             if (game != null) { bolds.Add(game.Timer); bolds.Add(game.Countdown); Add(regulars, game.PlayerLabels); thins.Add(game.OwnScore); thins.Add(game.Inventory); }
             var lobby = Find<LobbyUI>();
-            if (lobby != null) { regulars.Add(lobby.CodeText); Add(regulars, lobby.Names); thins.Add(lobby.Message); }
+            if (lobby != null) { regulars.Add(lobby.CodeText); Add(thins, lobby.Names); thins.Add(lobby.Message); }
             var nav = Find<NavigationUI>();
             if (nav != null) { thins.Add(nav.Status); thins.Add(nav.Name); }
             var personalize = Find<PersonalizeUI>();
@@ -159,9 +160,10 @@ namespace Ratones.Basic.Editor
 
         static void Connection()
         {
-            SkinButton("Crear partida", "PARTIDA/BOTON_CREARPARTIDA");
-            SkinButton("Unirse", "PARTIDA/BOTON_UNIRSE");
-            SkinButton("Volver", "PARTIDA/BOTON_REGRESAR");
+            // PrepareJoin solo mueve estos botones en Y; el tamaño se pone aquí.
+            Layout(SkinButton("Crear partida", "PARTIDA/BOTON_CREARPARTIDA"), Center, Vector2.zero, new Vector2(250, 120));
+            Layout(SkinButton("Unirse", "PARTIDA/BOTON_UNIRSE"), Center, Vector2.zero, new Vector2(250, 120));
+            Corner(SkinButton("Volver", "PARTIDA/BOTON_REGRESAR"), false);
             // Quita Entrar y acomoda el desplegable: Unirse abre el código y, con código, entra.
             MenuTools.PrepareJoin();
         }
@@ -170,8 +172,14 @@ namespace Ratones.Basic.Editor
         {
             LobbyUI lobby = Find<LobbyUI>(); if (lobby == null) { Warn("Falta LobbyUI."); return; }
             SkinButton("Iniciar", "INICIAR PARTIDA/BOTON_INICIAR");
-            Layout(SkinButton("Personalizar", "INICIAR PARTIDA/BOTON_PERSONALIZAR"), TopRight, new Vector2(-200, -70), new Vector2(340, 90));
-            Layout(SkinButton("Volver", "INICIAR PARTIDA/BOTON_REGRESAR"), TopLeft, new Vector2(70, -70), new Vector2(90, 90));
+            Corner(SkinButton("Personalizar", "INICIAR PARTIDA/BOTON_PERSONALIZAR"), true);
+            Corner(SkinButton("Volver", "INICIAR PARTIDA/BOTON_REGRESAR"), false);
+            // El código va debajo del banner PARTIDA (antes quedaba tapado por él).
+            if (lobby.CodeText != null)
+            {
+                Layout(lobby.CodeText.transform, TopCenter, new Vector2(0, -155), new Vector2(600, 50));
+                Style(lobby.CodeText, regular, 30, Dark, TextAnchor.MiddleCenter);
+            }
             for (int i = 1; i <= 4; i++)
             {
                 Transform slot = Named("Jugador" + i);
@@ -179,7 +187,32 @@ namespace Ratones.Basic.Editor
             }
             if (lobby.CodeText != null)
                 Layout(Decoration("TituloPartida", "INICIAR PARTIDA/TituloPartida", lobby.CodeText.transform.parent, 0), TopCenter, new Vector2(0, -70), new Vector2(430, 122));
+            HostLabels(lobby);
             Undo.RecordObject(lobby, "Auras"); lobby.AuraSprites = Auras();
+        }
+
+        // Nombre del jugador en Thin y, debajo, "Anfitrión" en Bold (un Text por fuente: Unity no mezcla fuentes en uno).
+        static void HostLabels(LobbyUI lobby)
+        {
+            if (lobby.Names == null) return;
+            var hosts = new Text[lobby.Names.Length];
+            for (int i = 0; i < lobby.Names.Length; i++)
+            {
+                Text name = lobby.Names[i]; if (name == null) continue;
+                Transform existing = name.transform.parent.Find("Anfitrion");
+                Text host = existing != null ? existing.GetComponent<Text>() : null;
+                if (host == null)
+                {
+                    GameObject copy = Object.Instantiate(name.gameObject, name.transform.parent, false);
+                    Undo.RegisterCreatedObjectUndo(copy, "Crear Anfitrión");
+                    copy.name = "Anfitrion"; host = copy.GetComponent<Text>(); host.text = "";
+                }
+                Layout(name.transform, Center, new Vector2(0, -80), new Vector2(215, 60));
+                Layout(host.transform, Center, new Vector2(0, -132), new Vector2(215, 32));
+                Style(host, bold, 22, name.color, TextAnchor.MiddleCenter);
+                hosts[i] = host;
+            }
+            Undo.RecordObject(lobby, "Anfitrión"); lobby.HostLabels = hosts;
         }
 
         static void Personalize()
@@ -202,14 +235,14 @@ namespace Ratones.Basic.Editor
             SkinButton("LLAVE", "PERSONALIZAR/LLAVE_PERSONALIZAR");
             SkinButton("AURA", "PERSONALIZAR/AURA_PERSONALIZAR");
             SkinButton("Guardar", "PERSONALIZAR/BOTON_GUARDAR");
-            SkinButton("Volver", "PERSONALIZAR/BOTON_REGRESAR");
+            Corner(SkinButton("Volver", "PERSONALIZAR/BOTON_REGRESAR"), false);
             Undo.RecordObject(ui, "Auras"); ui.AuraSprites = Auras();
         }
 
         static void Settings()
         {
             SettingsUI ui = Find<SettingsUI>(); if (ui == null) { Warn("Falta SettingsUI."); return; }
-            Layout(SkinButton("Volver", "CONFIGURACION/BOTON_REGRESAR"), TopLeft, new Vector2(80, -83), new Vector2(86, 86));
+            Corner(SkinButton("Volver", "CONFIGURACION/BOTON_REGRESAR"), false);
             // Volver al menú guarda las preferencias (SettingsUI.Back): va sobre el borde inferior del marco.
             Layout(SkinButton("Volver al menú", "CONFIGURACION/BOTON_GUARDAR"), Center, new Vector2(0, -160), new Vector2(335, 62));
 
@@ -369,16 +402,9 @@ namespace Ratones.Basic.Editor
             // Laterales: RawImage con los azulejos a tamaño real (256x720 de 1920x1080).
             Tiles("FondoLateralIzquierdo", 0);
             Tiles("FondoLateralDerecho", .5f);
-            Layout(SkinButton("Volver", "JUGAR/BOTON_REGRESAR"), TopLeft, new Vector2(84, -61), new Vector2(86, 86));
+            Corner(SkinButton("Volver", "JUGAR/BOTON_REGRESAR"), false);
 
-            // Cruceta: queso grande abajo a la izquierda con las flechas adentro.
-            Transform pad = Named("Cruceta");
-            if (pad == null) Warn("No se encontró Cruceta.");
-            else { SetSprite(pad, "JUGAR/FONDO_CRUZETA"); Layout(pad, BottomLeft, new Vector2(140, 285), new Vector2(250, 250)); }
-            Layout(SkinButton("Arriba", "JUGAR/FLECHA_ARRIBA", under: pad), Center, new Vector2(0, 58), new Vector2(64, 64));
-            Layout(SkinButton("Abajo", "JUGAR/FLECHA_ABAJO", under: pad), Center, new Vector2(0, -58), new Vector2(64, 64));
-            Layout(SkinButton("Izq.", "JUGAR/FLECHA_IZQ", under: pad), Center, new Vector2(-62, 0), new Vector2(64, 64));
-            Layout(SkinButton("Der.", "JUGAR/FLECHA_DER", under: pad), Center, new Vector2(62, 0), new Vector2(64, 64));
+            Stick(game);
 
             ParticipantBar(game);
 
@@ -393,8 +419,43 @@ namespace Ratones.Basic.Editor
 
             Power(game.SpeedButton, "JUGAR/POWERUP_VELOCIDAD", -258, game.SpeedLabel);
             Power(game.FreezeButton, "JUGAR/POWERUP_DETENER", -486, game.FreezeLabel);
-            // El puntaje propio ya aparece en los marcadores de arriba.
-            if (game.OwnScore != null) Hide(game.OwnScore.gameObject);
+            // Puntos y alimentos propios en el panel izquierdo, entre regresar y la cruceta.
+            if (game.OwnScore != null)
+            {
+                Show(game.OwnScore.gameObject);
+                Layout(game.OwnScore.transform, TopLeft, new Vector2(128, -205), new Vector2(240, 60));
+                Style(game.OwnScore, thin, 22, Dark, TextAnchor.MiddleCenter);
+            }
+        }
+        // Joystick abajo a la izquierda: base redonda y el queso como perilla (sin las flechas de antes).
+        static void Stick(GameUI game)
+        {
+            Transform pad = Named("Cruceta");
+            if (pad == null) { Warn("No se encontró Cruceta."); return; }
+            foreach (string arrow in new[] { "Arriba", "Abajo", "Izq.", "Der." })
+            {
+                Transform old = Named(arrow, pad);
+                if (old != null) Undo.DestroyObjectImmediate(old.gameObject);
+            }
+            Sprite circle = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Ratones/Arte/Circulo.png");
+            if (circle == null) { Warn("No se encontró el sprite Assets/Ratones/Arte/Circulo.png"); return; }
+            Image ring = pad.GetComponent<Image>();
+            if (ring == null) ring = Undo.AddComponent<Image>(pad.gameObject);
+            Undo.RecordObject(ring, "Base joystick");
+            ring.sprite = circle; ring.type = Image.Type.Simple; ring.preserveAspect = true;
+            ring.color = new Color(Dark.r, Dark.g, Dark.b, .35f); ring.raycastTarget = true;
+            Layout(pad, BottomLeft, new Vector2(140, 285), new Vector2(230, 230));
+
+            Transform knob = Child(pad, "Perilla", pad.childCount);
+            SetSprite(knob, "JUGAR/FONDO_CRUZETA");
+            knob.GetComponent<Image>().raycastTarget = false;
+            Layout(knob, Center, Vector2.zero, new Vector2(130, 130));
+
+            Joystick stick = pad.GetComponent<Joystick>();
+            if (stick == null) stick = Undo.AddComponent<Joystick>(pad.gameObject);
+            Undo.RecordObject(stick, "Joystick");
+            stick.Knob = (RectTransform)knob; stick.Radius = 70;
+            Undo.RecordObject(game, "Joystick"); game.Stick = stick;
         }
         static void Tiles(string name, float offsetX)
         {
@@ -433,19 +494,20 @@ namespace Ratones.Basic.Editor
             if (button == null) { Warn("Falta un botón de poder en GameUI."); return; }
             SetSprite(button.transform, sprite);
             Layout(button.transform, TopRight, new Vector2(-137, y), new Vector2(200, 130));
-            // Sin carga el poder se ve atenuado, no casi invisible.
             Undo.RecordObject(button, "Poder");
-            ColorBlock colors = button.colors; colors.disabledColor = new Color(1, 1, 1, .6f); button.colors = colors;
+            // Sin carga el poder se ve gris.
+            ColorBlock colors = button.colors; colors.disabledColor = new Color(.5f, .5f, .5f, 1); button.colors = colors;
             if (label == null) return;
-            Layout(label.transform, BottomCenter, new Vector2(0, -14), new Vector2(200, 28));
-            Style(label, thin, 18, Dark, TextAnchor.MiddleCenter);
+            // "VELOCIDAD / Sin carga" encima de la imagen.
+            Layout(label.transform, TopCenter, new Vector2(0, 26), new Vector2(220, 50));
+            Style(label, regular, 20, Dark, TextAnchor.MiddleCenter);
         }
 
         static void Results()
         {
             ResultsUI ui = Find<ResultsUI>(); if (ui == null) { Warn("Falta ResultsUI."); return; }
-            Layout(SkinButton("Salir al menú", "PODIO/BOTON_MENU"), TopLeft, new Vector2(85, -91), new Vector2(88, 88));
-            Layout(SkinButton("X", "PODIO/BOTON_CERRAR"), TopRight, new Vector2(-74, -91), new Vector2(88, 88));
+            Corner(SkinButton("Salir al menú", "PODIO/BOTON_MENU"), false);
+            Corner(SkinButton("X", "PODIO/BOTON_CERRAR"), true);
             if (ui.Title != null)
             {
                 Layout(Decoration("TituloFelicidades", "PODIO/TITULO_FELICIDADES", ui.Title.transform.parent, ui.Title.transform.GetSiblingIndex()),
@@ -529,7 +591,7 @@ namespace Ratones.Basic.Editor
             image.sprite = frames[0]; image.raycastTarget = false; image.preserveAspect = false; image.color = Color.white;
             SpriteAnimation animation = go.GetComponent<SpriteAnimation>() ?? Undo.AddComponent<SpriteAnimation>(go);
             Undo.RecordObject(animation, "Confeti");
-            animation.Frames = frames; animation.Fps = ConfettiFps; animation.Loop = false;
+            animation.Frames = frames; animation.Fps = ConfettiFps; animation.Loop = false; animation.Repeats = ConfettiRepeats;
         }
 
         // ---------- Utilidades ----------
@@ -587,6 +649,12 @@ namespace Ratones.Basic.Editor
             if (image != null) image.raycastTarget = false;
             return image;
         }
+        // Botones redondos de las esquinas superiores (regresar, personalizar, cerrar…): grandes y a 20 px del borde.
+        const float CornerSize = 130, CornerOffset = 85;
+        static void Corner(Component button, bool right)
+        {
+            Layout(button, right ? TopRight : TopLeft, new Vector2(right ? -CornerOffset : CornerOffset, -CornerOffset), new Vector2(CornerSize, CornerSize));
+        }
         static void Layout(Component target, Vector2 anchor, Vector2 position, Vector2 size, Vector2? pivot = null)
         {
             if (target == null) return;
@@ -611,6 +679,11 @@ namespace Ratones.Basic.Editor
             foreach (Text text in All<Text>())
                 if (text.GetComponentInParent<Selectable>(true) == null && string.Equals((text.text ?? "").Trim(), value, System.StringComparison.OrdinalIgnoreCase))
                     Hide(text.gameObject);
+        }
+        static void Show(GameObject go)
+        {
+            if (go.activeSelf) return;
+            Undo.RecordObject(go, "Mostrar"); go.SetActive(true);
         }
         static void Hide(GameObject go)
         {

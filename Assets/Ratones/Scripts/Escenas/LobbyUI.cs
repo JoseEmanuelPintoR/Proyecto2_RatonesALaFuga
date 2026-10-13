@@ -8,6 +8,8 @@ namespace Ratones.Basic
     {
         public Text CodeText, Message;
         public Text[] Names;
+        // "Anfitrión" en negrita debajo del nombre (mismo orden que Names). Si falta, va dentro de Names.
+        public Text[] HostLabels;
         public Image[] Auras, Keys;
         public Button StartButton;
         public Button PersonalizeButton;
@@ -82,15 +84,19 @@ namespace Ratones.Basic
             for (int i = 0; i < 4; i++)
             {
                 Player p = state.Players.FirstOrDefault(x => x.Connected && x.Slot == i);
-                Names[i].text = p == null ? "Esperando…" : p.Name + (p.Id == session.LocalId ? " (tú)" : "") + (p.Id == state.HostId ? "\nAnfitrión" : "");
+                bool host = p != null && p.Id == state.HostId;
+                Text hostLabel = HostLabels != null && i < HostLabels.Length ? HostLabels[i] : null;
+                Names[i].text = p == null ? "Esperando…" : p.Name + (p.Id == session.LocalId ? " (tú)" : "") + (host && hostLabel == null ? "\nAnfitrión" : "");
+                if (hostLabel != null) hostLabel.text = host ? "Anfitrión" : "";
                 if (p == null) { Auras[i].sprite = emptyAuras[i]; Auras[i].color = Color.gray; }
                 else if (!Palette.SetAura(Auras[i], AuraSprites, p.AuraColor)) Auras[i].color = Palette.Colors[p.AuraColor];
                 Keys[i].color = p == null ? Color.gray : Palette.Colors[p.KeyColor];
             }
-            int count = state.Players.Count(p => p.Connected);
-            StartButton.interactable = session.IsHost && count >= 2 && state.Phase == Phase.Lobby;
+            int count = state.Players.Count(p => p.Connected), needed = session.Solo ? 1 : Rules.MinPlayers;
+            StartButton.interactable = session.IsHost && count >= needed && state.Phase == Phase.Lobby;
             if (PersonalizeButton != null) PersonalizeButton.interactable = state.Phase == Phase.Lobby;
-            Message.text = count < 2 ? "Se necesitan al menos 2 jugadores." :
+            Message.text = count < needed ? "Se necesitan al menos 2 jugadores." :
+                session.Solo && state.Phase == Phase.Lobby ? "Modo solo. Ya puedes iniciar." :
                 state.Phase == Phase.Results ? "Esperando a que el anfitrión vuelva al lobby." :
                 session.IsHost ? count + "/4 jugadores. Ya puedes iniciar." : "Esperando que el anfitrión inicie.";
         }

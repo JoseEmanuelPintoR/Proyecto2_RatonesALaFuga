@@ -16,6 +16,9 @@ namespace Ratones.Basic
         public string RoomCode { get; private set; } = "";
         public string Status { get; private set; } = "";
         public bool IsHost { get { return server != null; } }
+        // Código secreto para probar sin otros jugadores: crea una sala local de 1 jugador sin anunciarla en la red.
+        public const string SoloCode = "zzzzzz";
+        public bool Solo { get; private set; }
         public bool IsConnecting { get { return client != null && !client.Ready && client.Error == null; } }
         public bool Connected { get { return server != null || (client != null && client.Ready); } }
         public string PlayerName { get; private set; }
@@ -95,9 +98,22 @@ namespace Ratones.Basic
         public void JoinRoom(string code)
         {
             code = (code ?? "").Trim();
+            if (string.Equals(code, SoloCode, StringComparison.OrdinalIgnoreCase)) { PlaySolo(); return; }
             if (!LanDiscovery.ValidCode(code)) { Status = "Escribe los 6 números del código."; return; }
             Stop(); RoomCode = code;
             client = new GameClient(code, PlayerName, KeyColor, AuraColor); Status = "Buscando sala…";
+        }
+        void PlaySolo()
+        {
+            Stop();
+            try
+            {
+                server = new GameServer(SoloCode, PlayerName, KeyColor, AuraColor, Environment.TickCount);
+                server.Simulation.MinPlayers = 1; Solo = true;
+                State = server.Simulation.State; LocalId = server.HostId;
+                RoomCode = "Modo solo"; Status = ""; Go("Lobby");
+            }
+            catch (Exception e) { Stop(); Status = "No se pudo abrir el modo solo: " + e.Message; }
         }
         void Update()
         {
@@ -174,7 +190,7 @@ namespace Ratones.Basic
             if (client != null) client.Dispose(); if (beacon != null) beacon.Dispose(); if (server != null) server.Dispose();
             client = null; beacon = null; server = null; State = null; LocalId = -1;
             RoomCode = ""; previousPhase = null; previousRound = -1; previousScore = 0; previousBoost = previousFreeze = 0;
-            Status = "";
+            Status = ""; Solo = false;
         }
         void OnApplicationFocus(bool focused) { if (!focused) Move(Vector2.zero); }
         void OnApplicationPause(bool paused)

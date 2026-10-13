@@ -11,6 +11,8 @@ namespace Ratones.Basic
         readonly Random random;
         readonly float duration;
         int nextId, turn;
+        // Jugadores necesarios para iniciar; el modo solo (código secreto) lo baja a 1.
+        public int MinPlayers = Rules.MinPlayers;
         public int Connected { get { return State.Players.Count(p => p.Connected); } }
         public Simulation(int seed, float roundDuration = Rules.RoundTime)
         { random = new Random(seed); duration = Math.Max(1, roundDuration); State.TimeLeft = duration; State.HostId = -1; }
@@ -50,7 +52,7 @@ namespace Ratones.Basic
             Player p = State.Player(id); if (p == null) return;
             p.Connected = false; p.InputX = p.InputZ = 0;
             if (State.Phase == Phase.Lobby) State.Players.Remove(p);
-            else if ((State.Phase == Phase.Playing || State.Phase == Phase.Countdown) && Connected < 2)
+            else if ((State.Phase == Phase.Playing || State.Phase == Phase.Countdown) && Connected < MinPlayers)
             {
                 State.Phase = Phase.Results; State.Winners.Clear();
                 State.Result = "Partida cancelada: queda menos de 2 jugadores.";
@@ -58,7 +60,7 @@ namespace Ratones.Basic
         }
         public bool Start(int requester)
         {
-            if (requester != State.HostId || State.Phase != Phase.Lobby || Connected < 2) return false;
+            if (requester != State.HostId || State.Phase != Phase.Lobby || Connected < MinPlayers) return false;
             State.Players.RemoveAll(p => !p.Connected);
             State.Round++; State.Items.Clear(); State.Winners.Clear(); State.Result = "";
             State.WorldRevision++;

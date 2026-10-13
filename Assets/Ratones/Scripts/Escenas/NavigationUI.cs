@@ -24,6 +24,13 @@ namespace Ratones.Basic
         Session Session { get { return Ratones.Basic.Session.Ensure(); } }
         void Start()
         {
+            // El código de sala son 6 números, pero también se acepta la z del código secreto del modo solo.
+            if (Code != null)
+            {
+                Code.contentType = InputField.ContentType.Custom; Code.characterValidation = InputField.CharacterValidation.None;
+                Code.keyboardType = TouchScreenKeyboardType.Default;
+                Code.onValidateInput = (text, index, c) => c >= '0' && c <= '9' ? c : c == 'z' || c == 'Z' ? 'z' : '\0';
+            }
             if (Slide != null)
             {
                 openPositions = new Vector2[Slide.Length];
