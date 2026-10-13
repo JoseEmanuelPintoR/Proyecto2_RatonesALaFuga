@@ -24,7 +24,7 @@ namespace Ratones.Basic.Editor
             ("Trampa", "Trampa_UVS.fbx", 3, new Color(.45f, .45f, 1)),
         };
         // Altura del modelo sobre el suelo y diámetro del aura respecto al tamaño del item.
-        const float ItemLift = .15f, AuraScale = 1.25f;
+        const float ItemLift = .15f, AuraScale = .55f;
 
         [MenuItem("Ratones/Preparar modelos de items")]
         public static void PrepareAll()
@@ -34,11 +34,23 @@ namespace Ratones.Basic.Editor
             AssetDatabase.SaveAssets();
         }
 
-        // Giro (grados) y ajuste de altura de la cocina si su piso no queda justo en y = 0.
-        const float CocinaYaw = 0, CocinaAltura = 0;
+        // Giro de la cocina (grados) por si se quiere otra pared detrás de la cámara.
+        const float CocinaYaw = 0;
+        // Zona de juego inicial en coordenadas del FBX (X, Z): cuadrado sobre el piso de madera del centro.
+        static readonly Vector2 ZonaCentro = new Vector2(-1.75f, .8f);
+        const float ZonaLado = 8.4f;
+        // Puntos de referencia del FBX (objetos hijos directos de la raíz) con su traslación (X, Z) conocida,
+        // para pasar coordenadas del FBX a la escena sin depender de cómo Unity convierte los ejes.
+        static readonly (string name, Vector2 position)[] Referencias =
+        { ("pCube24", new Vector2(6.585f, -8.394f)), ("pCube23", new Vector2(-9.924f, 4.591f)), ("pCube49", new Vector2(4.665f, -.208f)) };
+        // La zona mide un poco más que la arena para que los ratones del borde no queden justo en su orilla.
+        const float CocinaMargen = 1.02f;
+        const string CapaCocina = FollowCamera.KitchenLayer;
+        // Mallas que cubren casi toda la planta (el cuarto: piso, paredes y techo); el resto son muebles.
+        const float FraccionCuarto = .6f;
 
-        // Pone el modelo de la cocina como escenario de la arena. Solo es visual: las colisiones
-        // siguen siendo las de ArenaLayout (RampasYObstaculos y los límites).
+        // La cocina es decoración: la zona de juego (cuadro rosado) queda en la arena de 100 x 100 con la madera en y = 0.
+        // Las colisiones siguen siendo las de ArenaLayout (RampasYObstaculos y los límites), con la textura de la madera.
         [MenuItem("Ratones/Preparar cocina")]
         public static void PrepareKitchen()
         {
@@ -48,53 +60,228 @@ namespace Ratones.Basic.Editor
             string fbx = Models + "Cocina/Cocina_UVS.fbx";
             var importer = AssetImporter.GetAtPath(fbx) as ModelImporter;
             if (importer == null) { Debug.LogError("No se encontró " + fbx); return; }
-            if (importer.importCameras || importer.importLights || importer.importAnimation || importer.animationType != ModelImporterAnimationType.None)
+            // Legible para medir el piso con rayos (posición y coordenadas de textura).
+            if (importer.importCameras || importer.importLights || importer.importAnimation || importer.animationType != ModelImporterAnimationType.None || !importer.isReadable)
             {
                 importer.importCameras = false; importer.importLights = false; importer.importAnimation = false;
-                importer.animationType = ModelImporterAnimationType.None; importer.SaveAndReimport();
+                importer.animationType = ModelImporterAnimationType.None; importer.isReadable = true; importer.SaveAndReimport();
             }
-            Undo.SetCurrentGroupName("Preparar cocina"); int group = Undo.GetCurrentGroup();
             foreach (GameObject old in scene.GetRootGameObjects().Where(g => g.name == "Cocina").ToArray()) Undo.DestroyObjectImmediate(old);
 
-            var kitchen = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(fbx), scene);
-            kitchen.name = "Cocina";
-            Undo.RegisterCreatedObjectUndo(kitchen, "Preparar cocina");
-            Renderer[] renderers = kitchen.GetComponentsInChildren<Renderer>();
+            // Raíz sin giro (Cocina) con el modelo y la zona como hijos: escalar la raíz mueve los dos juntos.
+            var root = new GameObject("Cocina");
+            SceneManager.MoveGameObjectToScene(root, scene);
+            Undo.RegisterCreatedObjectUndo(root, "Preparar cocina");
+            var model = (GameObject)PrefabUtility.InstantiatePrefab(AssetDatabase.LoadAssetAtPath<GameObject>(fbx), scene);
+            model.name = "Modelo"; model.transform.SetParent(root.transform, false);
+            model.transform.localRotation = Quaternion.Euler(0, CocinaYaw, 0) * model.transform.localRotation;
+            Renderer[] renderers = model.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) { Debug.LogError("Cocina_UVS.fbx no tiene mallas."); return; }
             string[] slots = renderers.SelectMany(r => r.sharedMaterials).Where(m => m != null).Select(m => m.name).Distinct().ToArray();
             var materials = new Dictionary<string, Material>();
             foreach (string slot in slots)
-                materials[slot] = CreateMaterial(slots.Length == 1 ? "CocinaModelo" : "CocinaModelo_" + Clean(slot).Trim('_'), "Cocina/Cocina_UVS_" + Clean(slot) + "_", 2048);
+                materials[slot] = CreateMaterial(slots.Length == 1 ? "CocinaModelo" : "CocinaModelo_" + Clean(slot).Trim('_'), "Cocina/Cocina_UVS_" + Clean(slot) + "_", 4096);
             foreach (Renderer r in renderers)
             {
                 Material[] shared = r.sharedMaterials;
                 for (int i = 0; i < shared.Length; i++)
                 { Material m; if (shared[i] != null && materials.TryGetValue(shared[i].name, out m) && m != null) shared[i] = m; }
                 r.sharedMaterials = shared;
+                r.gameObject.isStatic = true;
             }
-
-            // Escala uniforme para que el lado más largo del piso mida lo mismo que la arena, centrada y con la base en el suelo.
-            kitchen.transform.rotation = Quaternion.Euler(0, CocinaYaw, 0) * kitchen.transform.rotation;
+            // Sin metal: el MaskMap marca partes del piso como metálicas y sin reflejos se ven negras.
+            foreach (Material m in materials.Values.Where(m => m != null))
+            {
+                m.SetTexture("_MetallicGlossMap", null); m.DisableKeyword("_METALLICGLOSSMAP");
+                m.SetFloat("_Metallic", 0); m.SetFloat("_Glossiness", .15f); EditorUtility.SetDirty(m);
+            }
+            // Primero a un tamaño cómodo para medir (lado más largo = arena); el ajuste final lo hace la zona.
             Bounds bounds = WorldBounds(renderers);
             float longest = Mathf.Max(bounds.size.x, bounds.size.z);
-            if (longest > 0) kitchen.transform.localScale *= Rules.ArenaSize / longest;
+            if (longest > 0) root.transform.localScale *= Rules.ArenaSize / longest;
             bounds = WorldBounds(renderers);
-            kitchen.transform.position -= new Vector3(bounds.center.x, bounds.min.y - CocinaAltura, bounds.center.z);
-            foreach (Renderer r in renderers) r.gameObject.isStatic = true;
 
-            // El suelo gris queda solo como colisión.
-            Transform plane = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<Transform>(true)).FirstOrDefault(t => t.name == "Plano100x100");
-            MeshRenderer floor = plane != null ? plane.GetComponent<MeshRenderer>() : null;
-            if (floor != null) { Undo.RecordObject(floor, "Ocultar suelo"); floor.enabled = false; }
-            else Debug.LogWarning("No se encontró Plano100x100; el suelo gris sigue visible.");
-
-            Undo.CollapseUndoOperations(group);
-            EditorSceneManager.MarkSceneDirty(scene); AssetDatabase.SaveAssets();
-            Selection.activeGameObject = kitchen;
-            bounds = WorldBounds(renderers);
-            Debug.Log("Listo: cocina de " + bounds.size.x.ToString("0.0") + " x " + bounds.size.y.ToString("0.0") + " x " + bounds.size.z.ToString("0.0") + " m. Guarda Juego con Ctrl+S. Si queda girada o hundida, cambia CocinaYaw o CocinaAltura en ModelTools.cs.");
+            var zone = new GameObject("ZonaDeJuego", typeof(ZonaDeJuego)).transform;
+            zone.SetParent(root.transform, false);
+            Vector2 center, axisX, axisZ;
+            if (FbxToScene(model.transform, out center, out axisX, out axisZ))
+            {
+                Vector2 world = center + axisX * ZonaCentro.x + axisZ * ZonaCentro.y;
+                float side = ZonaLado * Mathf.Sqrt(Mathf.Abs(axisX.x * axisZ.y - axisX.y * axisZ.x));
+                zone.position = new Vector3(world.x, bounds.min.y, world.y);
+                zone.localScale = new Vector3(side, 1, side) / root.transform.localScale.x;
+            }
+            else
+            {
+                Debug.LogWarning("No se encontraron los objetos de referencia del FBX; la zona de juego queda en el centro del cuarto. Muévela sobre la madera.");
+                zone.position = new Vector3(bounds.center.x, bounds.min.y, bounds.center.z);
+                zone.localScale = new Vector3(bounds.size.x, 1, bounds.size.x) * .4f / root.transform.localScale.x;
+            }
+            FitKitchen(root.transform);
+            Selection.activeGameObject = zone.gameObject;
         }
 
+        [MenuItem("Ratones/Ajustar cocina a la zona de juego")]
+        public static void FitKitchenMenu()
+        {
+            if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de ajustar la cocina."); return; }
+            GameObject root = SceneManager.GetActiveScene().GetRootGameObjects().FirstOrDefault(g => g.name == "Cocina");
+            if (root == null || root.GetComponentInChildren<ZonaDeJuego>() == null) { Debug.LogWarning("Primero usa Ratones/Preparar cocina en la escena Juego."); return; }
+            Undo.RecordObject(root.transform, "Ajustar cocina");
+            Undo.RecordObject(root.GetComponentInChildren<ZonaDeJuego>().transform, "Ajustar cocina");
+            FitKitchen(root.transform);
+        }
+
+        // Escala la cocina para que la zona de juego sea la arena (piso en y = 0) y la deja de fondo: va en la capa
+        // Cocina, que FollowCamera dibuja detrás de todo, así los muebles solo se ven fuera de los límites del mapa.
+        static void FitKitchen(Transform root)
+        {
+            Scene scene = root.gameObject.scene;
+            Transform zone = root.GetComponentInChildren<ZonaDeJuego>().transform;
+            Transform model = root.Find("Modelo");
+            if (model == null) { Debug.LogError("Falta Cocina/Modelo: usa Ratones/Preparar cocina."); return; }
+            model.gameObject.SetActive(true);
+            Renderer[] renderers = model.GetComponentsInChildren<Renderer>();
+            Bounds bounds = WorldBounds(renderers);
+            float footprint = bounds.size.x * bounds.size.z;
+            Renderer[] room = renderers.Where(r => r.bounds.size.x * r.bounds.size.z >= footprint * FraccionCuarto).ToArray();
+            var colliders = new List<MeshCollider>();
+            try
+            {
+                foreach (Renderer r in room)
+                {
+                    MeshFilter filter = r.GetComponent<MeshFilter>();
+                    if (filter == null || filter.sharedMesh == null) continue;
+                    MeshCollider c = r.gameObject.AddComponent<MeshCollider>(); c.sharedMesh = filter.sharedMesh; colliders.Add(c);
+                }
+                Physics.SyncTransforms();
+                RaycastHit floorHit;
+                if (!FloorHit(colliders, new Vector2(zone.position.x, zone.position.z), bounds.max.y + 1, out floorHit))
+                { Debug.LogError("No hay piso de la cocina bajo la zona de juego: muévela sobre la madera."); return; }
+                float side = Mathf.Min(zone.lossyScale.x, zone.lossyScale.z);
+                float k = Rules.ArenaSize * CocinaMargen / side;
+                var pivot = new Vector3(zone.position.x, floorHit.point.y, zone.position.z);
+                root.localScale *= k;
+                root.position = k * (root.position - pivot);
+                Vector3 onFloor = zone.position; onFloor.y = .05f; zone.position = onFloor;
+            }
+            finally { foreach (MeshCollider c in colliders) if (c != null) Object.DestroyImmediate(c); }
+
+            // La cocina 3D queda de fondo (capa propia) y sin la foto de una versión anterior.
+            int layer = KitchenLayer();
+            if (layer >= 0) foreach (Transform t in model.GetComponentsInChildren<Transform>(true)) t.gameObject.layer = layer;
+            else Debug.LogWarning("No hay capas libres para " + CapaCocina + "; la cocina puede tapar el juego.");
+            foreach (Renderer r in room) r.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            GameObject photo = scene.GetRootGameObjects().FirstOrDefault(g => g.name == "CocinaPlano");
+            if (photo != null) Undo.DestroyObjectImmediate(photo);
+            FloorTextures(scene);
+
+            // Rampas y bloques de nuevo (UV para las texturas).
+            ArenaTools.Prepare();
+            EditorSceneManager.MarkSceneDirty(scene); AssetDatabase.SaveAssets();
+            Debug.Log("Listo: cocina 3D de fondo alrededor de la arena. Si la zona no cae donde quieres, mueve o escala " +
+                "Cocina/ZonaDeJuego (cuadro rosado) y usa Ratones/Ajustar cocina a la zona de juego. Guarda con Ctrl+S.");
+        }
+
+        // Texturas del juego: madera en el piso jugable (Plano100x100) y en plataformas y rampas (Suelo),
+        // mármol en los bloques y los límites (Borde). Se repiten cada MetrosMadera / MetrosMarmol metros.
+        const string Texturas = "Assets/Ratones/Arte/Texturas/";
+        const float MetrosMadera = 8, MetrosMarmol = 6;
+        [MenuItem("Ratones/Aplicar texturas del piso")]
+        public static void FloorTexturesMenu()
+        {
+            if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de aplicar las texturas."); return; }
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.name != "Juego") { Debug.LogWarning("Abre la escena Juego antes de aplicar las texturas."); return; }
+            FloorTextures(scene);
+            EditorSceneManager.MarkSceneDirty(scene); AssetDatabase.SaveAssets();
+            Debug.Log("Listo: piso de madera y bloques de mármol. Guarda Juego con Ctrl+S.");
+        }
+        static void FloorTextures(Scene scene)
+        {
+            Texture2D wood = TiledTexture(Texturas + "PisoMadera.png"), marble = TiledTexture(Texturas + "Marmol.png");
+            if (wood == null || marble == null) { Debug.LogError("Faltan PisoMadera.png o Marmol.png en " + Texturas); return; }
+            // Cada cara de los cubos y rampas va de 0 a 1 en UV: el piso mide 100 m y las caras de los bloques unos 6–12 m.
+            Material floorMaterial = TiledMaterial("PisoMadera", wood, Rules.ArenaSize / MetrosMadera);
+            TiledMaterial("Suelo", wood, 12 / MetrosMadera);
+            TiledMaterial("Borde", marble, 8 / MetrosMarmol);
+            Transform plane = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<Transform>(true)).FirstOrDefault(t => t.name == "Plano100x100");
+            MeshRenderer floor = plane != null ? plane.GetComponent<MeshRenderer>() : null;
+            if (floor == null) { Debug.LogWarning("No se encontró Plano100x100 para ponerle la madera."); return; }
+            Undo.RecordObject(floor, "Piso de madera");
+            floor.enabled = true; floor.sharedMaterial = floorMaterial;
+        }
+        static Texture2D TiledTexture(string path)
+        {
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null) return null;
+            if (importer.textureType != TextureImporterType.Default || importer.wrapMode != TextureWrapMode.Repeat || !importer.sRGBTexture)
+            { importer.textureType = TextureImporterType.Default; importer.wrapMode = TextureWrapMode.Repeat; importer.sRGBTexture = true; importer.SaveAndReimport(); }
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+        }
+        // Material Standard con la textura repetida "repeats" veces a lo ancho, respetando la proporción de la imagen.
+        static Material TiledMaterial(string name, Texture2D texture, float repeats)
+        {
+            string path = "Assets/Ratones/Materiales/" + name + ".mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) { material = new Material(Shader.Find("Standard")); AssetDatabase.CreateAsset(material, path); }
+            material.color = Color.white; material.mainTexture = texture;
+            material.mainTextureOffset = Vector2.zero;
+            material.mainTextureScale = new Vector2(repeats, repeats * texture.width / texture.height);
+            material.SetTexture("_BumpMap", null); material.DisableKeyword("_NORMALMAP");
+            material.SetTexture("_MetallicGlossMap", null); material.DisableKeyword("_METALLICGLOSSMAP");
+            material.SetFloat("_Metallic", 0); material.SetFloat("_Glossiness", .15f);
+            EditorUtility.SetDirty(material);
+            return material;
+        }
+        // Crea la capa de la cocina en Project Settings > Tags and Layers si aún no existe.
+        static int KitchenLayer()
+        {
+            int existing = LayerMask.NameToLayer(CapaCocina);
+            if (existing >= 0) return existing;
+            var tags = new SerializedObject(AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset")[0]);
+            SerializedProperty layers = tags.FindProperty("layers");
+            for (int i = 8; i < layers.arraySize; i++)
+            {
+                SerializedProperty layer = layers.GetArrayElementAtIndex(i);
+                if (!string.IsNullOrEmpty(layer.stringValue)) continue;
+                layer.stringValue = CapaCocina; tags.ApplyModifiedProperties();
+                return i;
+            }
+            return -1;
+        }
+        // Transformación afín 2D de coordenadas del FBX (X, Z) a la escena, a partir de tres objetos de referencia.
+        static bool FbxToScene(Transform model, out Vector2 origin, out Vector2 axisX, out Vector2 axisZ)
+        {
+            origin = axisX = axisZ = Vector2.zero;
+            var points = new List<(Vector2 fbx, Vector2 scene)>();
+            foreach (var reference in Referencias)
+            {
+                Transform t = model.GetComponentsInChildren<Transform>(true).FirstOrDefault(x => x.name == reference.name);
+                if (t == null) return false;
+                points.Add((reference.position, new Vector2(t.position.x, t.position.z)));
+            }
+            Vector2 n1 = points[1].fbx - points[0].fbx, n2 = points[2].fbx - points[0].fbx;
+            Vector2 w1 = points[1].scene - points[0].scene, w2 = points[2].scene - points[0].scene;
+            float det = n1.x * n2.y - n2.x * n1.y;
+            if (Mathf.Abs(det) < 1e-6f) return false;
+            // A = W · N⁻¹; sus columnas son hacia dónde va una unidad de X y de Z del FBX.
+            axisX = (w1 * n2.y - w2 * n1.y) / det;
+            axisZ = (w2 * n1.x - w1 * n2.x) / det;
+            origin = points[0].scene - axisX * points[0].fbx.x - axisZ * points[0].fbx.y;
+            return true;
+        }
+        // Superficie hacia arriba más baja bajo el punto (solo contra las mallas del cuarto).
+        static bool FloorHit(List<MeshCollider> colliders, Vector2 point, float top, out RaycastHit floor)
+        {
+            floor = default(RaycastHit); bool found = false;
+            foreach (RaycastHit hit in Physics.RaycastAll(new Vector3(point.x, top, point.y), Vector3.down, Mathf.Abs(top) * 4 + 1000))
+            {
+                if (!colliders.Contains(hit.collider as MeshCollider) || hit.normal.y < .9f) continue;
+                if (!found || hit.point.y < floor.point.y) { floor = hit; found = true; }
+            }
+            return found;
+        }
         // Sufijo de la textura del ratón para cada color de Palette.Colors (rojo, azul, verde, rosa, naranja,
         // amarillo, negro, celeste, morado, café, cian, lima). Se sacó muestreando el color de acento de cada PNG.
         static readonly string[] MouseKeySuffix = { " 4", "", " 6", " 5", " 8", " 9", " 2", " 1", " 11", " 3", " 10", " 7" };

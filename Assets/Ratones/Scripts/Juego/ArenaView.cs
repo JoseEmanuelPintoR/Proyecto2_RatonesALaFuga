@@ -65,13 +65,28 @@ namespace Ratones.Basic
         static Mesh Wedge(float width, float length, float height)
         {
             float w=width/2, l=length/2;
-            var mesh = new Mesh();
-            mesh.vertices = new[] {
+            Vector3[] corners = {
                 new Vector3(-w,0,-l),new Vector3(w,0,-l),new Vector3(-w,0,l),
                 new Vector3(w,0,l),new Vector3(-w,height,l),new Vector3(w,height,l)
             };
-            mesh.triangles = new[] {0,1,2, 1,3,2, 0,4,1, 1,4,5, 0,2,4, 1,5,3, 2,3,4, 3,5,4};
-            mesh.RecalculateNormals(); mesh.RecalculateBounds(); return mesh;
+            int[] faces = {0,1,2, 1,3,2, 0,4,1, 1,4,5, 0,2,4, 1,5,3, 2,3,4, 3,5,4};
+            // Vértices por cara (caras planas) y UV de 0 a 1 en cada cara, como los cubos, para la textura del piso.
+            var vertices = new Vector3[faces.Length]; var uv = new Vector2[faces.Length]; var triangles = new int[faces.Length];
+            for (int i = 0; i < faces.Length; i += 3)
+            {
+                Vector3 a=corners[faces[i]], b=corners[faces[i+1]], c=corners[faces[i+2]];
+                Vector3 n = Vector3.Cross(b-a,c-a);
+                for (int j = 0; j < 3; j++)
+                {
+                    Vector3 p = corners[faces[i+j]];
+                    float x=(p.x+w)/width, y=p.y/height, z=(p.z+l)/length;
+                    vertices[i+j]=p; triangles[i+j]=i+j;
+                    uv[i+j] = Mathf.Abs(n.x) >= Mathf.Abs(n.y) && Mathf.Abs(n.x) >= Mathf.Abs(n.z) ? new Vector2(z,y)
+                        : Mathf.Abs(n.y) >= Mathf.Abs(n.z) ? new Vector2(x,z) : new Vector2(x,y);
+                }
+            }
+            var mesh = new Mesh { vertices = vertices, uv = uv, triangles = triangles };
+            mesh.RecalculateNormals(); mesh.RecalculateTangents(); mesh.RecalculateBounds(); return mesh;
         }
         void OnDestroy()
         {
