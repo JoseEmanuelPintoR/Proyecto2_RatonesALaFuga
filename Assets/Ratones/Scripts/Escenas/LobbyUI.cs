@@ -14,6 +14,10 @@ namespace Ratones.Basic
         public Button StartButton;
         public Button PersonalizeButton;
         public Sprite[] AuraSprites, KeySprites;
+        // Ratón de frente en gris en los puestos vacíos. Si falta, se muestra la llave del color.
+        public Sprite MouseSprite;
+        // Ratón 3D girando con su aura y el color de su llave, uno por puesto (mismo orden que Names).
+        public MousePreview[] Previews;
         Sprite[] emptyAuras, emptyKeys;
         void Awake()
         {
@@ -94,7 +98,17 @@ namespace Ratones.Basic
                 if (hostLabel != null) hostLabel.text = host ? "Anfitrión" : "";
                 if (p == null) { Auras[i].sprite = emptyAuras[i]; Auras[i].color = Color.gray; }
                 else if (!Palette.SetAura(Auras[i], AuraSprites, p.AuraColor)) Auras[i].color = Palette.Colors[p.AuraColor];
-                if (p == null) { Keys[i].sprite = emptyKeys[i]; Keys[i].color = Color.gray; }
+                // Con jugador: el ratón 3D (ya trae aura y llave), sin el círculo ni la imagen de encima.
+                MousePreview preview = Previews != null && i < Previews.Length ? Previews[i] : null;
+                if (preview != null)
+                {
+                    bool shown = p != null;
+                    if (preview.gameObject.activeSelf != shown) preview.gameObject.SetActive(shown);
+                    if (shown) preview.Show(p.KeyColor, p.AuraColor);
+                    Auras[i].enabled = Keys[i].enabled = !shown;
+                }
+                if (MouseSprite != null) { Keys[i].sprite = MouseSprite; Keys[i].color = p == null ? new Color(.55f, .55f, .55f, .7f) : Color.white; }
+                else if (p == null) { Keys[i].sprite = emptyKeys[i]; Keys[i].color = Color.gray; }
                 else if (!Palette.SetKey(Keys[i], KeySprites, p.KeyColor)) Keys[i].color = Palette.Colors[p.KeyColor];
             }
             int count = state.Players.Count(p => p.Connected), needed = session.Solo ? 1 : Rules.MinPlayers;

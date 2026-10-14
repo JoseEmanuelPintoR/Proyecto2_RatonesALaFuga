@@ -64,7 +64,7 @@ namespace Ratones.Basic
             State.Players.RemoveAll(p => !p.Connected);
             State.Round++; State.Items.Clear(); State.Winners.Clear(); State.Result = "";
             State.WorldRevision++;
-            State.TimeLeft = duration; State.CountdownLeft = 3;
+            State.TimeLeft = duration; State.CountdownLeft = Rules.CountdownTime;
             var used = new List<Position>();
             foreach (Player p in State.Players)
             {

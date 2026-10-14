@@ -10,8 +10,10 @@ namespace Ratones.Basic
     {
         public static Session Instance { get; private set; }
         public AudioClip MenuMusic, GameMusic, PodiumMusic;
-        // Efectos: recoger comida o poder, trampa (DETENER), clic de botones y velocidad (pendiente).
+        // Efectos: recoger comida o poder, trampa (DETENER), clic de botones y velocidad.
         public AudioClip CollectClip, FreezeClip, ClickClip, SpeedClip;
+        // La velocidad suena más bajito que los demás efectos (0 = muda, 1 = igual que los demás).
+        [Range(0, 1)] public float SpeedVolume = .35f;
         public State State { get; private set; }
         public int LocalId { get; private set; } = -1;
         public string RoomCode { get; private set; } = "";
@@ -71,7 +73,7 @@ namespace Ratones.Basic
             { button.onClick.RemoveListener(PlayClick); button.onClick.AddListener(PlayClick); }
         }
         void PlayClick() { Play(ClickClip); }
-        void Play(AudioClip clip) { if (clip != null && Effects != null) Effects.PlayOneShot(clip); }
+        void Play(AudioClip clip, float volume = 1) { if (clip != null && Effects != null) Effects.PlayOneShot(clip, volume); }
         // Juego y Resultados tienen su propia canción; el resto de escenas comparte la del menú.
         void PlayMusicFor(string scene)
         {
@@ -153,7 +155,7 @@ namespace Ratones.Basic
             if (player != null)
             {
                 if (player.Score > previousScore || (player.Inventory & ~previousInventory) != 0) Play(CollectClip);
-                if (player.BoostLeft > previousBoost + .5f) Play(SpeedClip);
+                if (player.BoostLeft > previousBoost + .5f) Play(SpeedClip, SpeedVolume);
                 previousScore = player.Score; previousInventory = player.Inventory; previousBoost = player.BoostLeft;
             }
             // La trampa congela a los rivales: suena para todos (quien la lanza y los detenidos).

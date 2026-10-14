@@ -122,6 +122,29 @@ namespace Ratones.Basic.Editor
                 case "Resultados": Results(); break;
                 default: Debug.Log(scene.name + ": solo se cambiaron las fuentes."); break;
             }
+            Background();
+        }
+
+        // Fondo de cada escena (UI/FONDOS) en el RawImage FondoJPG. Juego usa los azulejos laterales.
+        static readonly Dictionary<string, string> Backgrounds = new Dictionary<string, string>
+        {
+            { "MenuInicio", "FONDO_INICIO" }, { "Conexion", "FONDO_JUGAR" }, { "Lobby", "FONDO_CREARPARTIDA" },
+            { "Personalizar", "FONDO_PERSONALIZAR" }, { "Configuracion", "FONDO_CONFIGURACION" }, { "Resultados", "FONDO_PODIO" },
+        };
+        static void Background()
+        {
+            string file;
+            if (!Backgrounds.TryGetValue(scene.name, out file)) return;
+            Transform t = Named("FondoJPG");
+            RawImage raw = t != null ? t.GetComponent<RawImage>() : null;
+            Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(Art + "FONDOS/" + file + ".png");
+            if (raw == null || texture == null) { Warn("No se pudo poner " + file + " en FondoJPG."); return; }
+            Undo.RecordObject(raw, "Fondo");
+            raw.texture = texture; raw.color = Color.white; raw.uvRect = new Rect(0, 0, 1, 1); raw.raycastTarget = false;
+            // Cubre toda la pantalla sin deformarse (en celulares más anchos que 16:9 recorta arriba y abajo).
+            AspectRatioFitter fitter = raw.GetComponent<AspectRatioFitter>() ?? Undo.AddComponent<AspectRatioFitter>(raw.gameObject);
+            Undo.RecordObject(fitter, "Fondo");
+            fitter.aspectMode = AspectRatioFitter.AspectMode.EnvelopeParent; fitter.aspectRatio = (float)texture.width / texture.height;
         }
 
         // ---------- Fuentes: títulos Bold, subtítulos Regular, descripciones Thin ----------
@@ -215,19 +238,55 @@ namespace Ratones.Basic.Editor
                 SetSprite(slot, "INICIAR PARTIDA/MARCO_JUGADOR", false);
                 Layout(slot, Center, new Vector2(slotX[i - 1], -20), new Vector2(235, 325));
             }
-            // La llave del color va como imagen encima del aura.
+            // Puesto vacío: el ratón de frente en gris, dentro del círculo.
             if (lobby.Keys != null)
                 foreach (Image key in lobby.Keys)
                     if (key != null)
                     {
-                        // Llave blanca: en un puesto vacío se tiñe de gris.
-                        SetSprite(key.transform, "LLAVES/LLAVE_BLANCA");
-                        Layout(key.transform, Center, new Vector2(0, 38), new Vector2(60, 60));
+                        SetSprite(key.transform, "PODIO/raton_frente");
+                        Layout(key.transform, Center, new Vector2(0, 37), new Vector2(68, 60));
                     }
+            Undo.RecordObject(lobby, "Ratón de frente"); lobby.MouseSprite = LoadSprite("PODIO/raton_frente");
+            LobbyPreviews(lobby);
             if (lobby.CodeText != null)
                 Layout(Decoration("TituloPartida", "INICIAR PARTIDA/TituloPartida", lobby.CodeText.transform.parent, 0), TopCenter, new Vector2(0, -70), new Vector2(430, 122));
             HostLabels(lobby);
             Undo.RecordObject(lobby, "Auras"); lobby.AuraSprites = Auras(); lobby.KeySprites = KeySprites();
+        }
+
+        // Un ratón 3D girando por puesto (MousePreview), del tamaño del círculo del aura.
+        static void LobbyPreviews(LobbyUI lobby)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<PlayerView>(PlayerPrefab);
+            if (prefab == null || lobby.Auras == null) { Warn("No se pudo preparar el ratón 3D del lobby."); return; }
+            var previews = new MousePreview[lobby.Auras.Length];
+            for (int i = 0; i < previews.Length; i++)
+            {
+                Image aura = lobby.Auras[i]; if (aura == null) continue;
+                Transform slot = aura.transform.parent;
+                Transform existing = slot.Find("VistaRaton");
+                GameObject go;
+                if (existing != null) go = existing.gameObject;
+                else
+                {
+                    go = new GameObject("VistaRaton", typeof(RectTransform), typeof(RawImage), typeof(MousePreview));
+                    Undo.RegisterCreatedObjectUndo(go, "Crear ratón del lobby");
+                    go.transform.SetParent(slot, false);
+                }
+                go.transform.SetSiblingIndex(aura.transform.GetSiblingIndex() + 1);
+                Layout(go.transform, Center, new Vector2(0, 40), new Vector2(120, 120));
+                RawImage raw = go.GetComponent<RawImage>();
+                Undo.RecordObject(raw, "Ratón del lobby"); raw.texture = null; raw.color = Color.clear; raw.raycastTarget = false;
+                MousePreview preview = go.GetComponent<MousePreview>();
+                Undo.RecordObject(preview, "Ratón del lobby");
+                preview.Prefab = prefab; preview.Target = raw; preview.Resolution = 256;
+                // Más alto y más lejos que en Personalizar para que se vea el aura completa debajo.
+                preview.CameraPosition = new Vector3(0, 2.6f, 4.6f); preview.LookHeight = .7f;
+                // Empieza oculto: LobbyUI lo muestra cuando el puesto tiene jugador.
+                Hide(go);
+                previews[i] = preview;
+            }
+            Undo.RecordObject(lobby, "Ratón del lobby"); lobby.Previews = previews;
         }
 
         // Nombre del jugador en Thin y, debajo, "Anfitrión" en Bold (un Text por fuente: Unity no mezcla fuentes en uno).
@@ -270,6 +329,10 @@ namespace Ratones.Basic.Editor
                 var view = (RectTransform)ui.Preview.transform;
                 Undo.RecordObject(view, "Acomodar ratón");
                 view.anchorMin = new Vector2(.02f, .1f); view.anchorMax = new Vector2(.5f, .9f); view.offsetMin = view.offsetMax = Vector2.zero;
+                // Sin textura el RawImage se ve como un rectángulo blanco: transparente hasta que MousePreview
+                // le pone la imagen del ratón (fondo transparente), así se ve FONDO_PERSONALIZAR detrás.
+                RawImage raw = ui.Preview.GetComponent<RawImage>();
+                if (raw != null) { Undo.RecordObject(raw, "Vista del ratón"); raw.texture = null; raw.color = Color.clear; }
             }
             SkinButton("LLAVE", "PERSONALIZAR/LLAVE_PERSONALIZAR");
             SkinButton("AURA", "PERSONALIZAR/AURA_PERSONALIZAR");
@@ -452,6 +515,7 @@ namespace Ratones.Basic.Editor
             Corner(SkinButton("Volver", "JUGAR/BOTON_REGRESAR"), false);
 
             Stick(game);
+            ExitDialog(game);
 
             ParticipantBar(game);
 
@@ -472,6 +536,47 @@ namespace Ratones.Basic.Editor
                 Show(game.OwnScore.gameObject);
                 Layout(game.OwnScore.transform, TopLeft, new Vector2(128, -205), new Vector2(240, 60));
                 Style(game.OwnScore, thin, 22, Dark, TextAnchor.MiddleCenter);
+            }
+        }
+        // "¿Salir de la partida?": marco de madera (MARCO_CONFIGURACION sin su título), el título sobre la pestaña
+        // de cuadros y los dos botones como píldoras amarillas de queso.
+        static readonly Color Cheese = new Color(1, .78f, .25f);
+        static void ExitDialog(GameUI game)
+        {
+            if (game.ExitDialog == null) { Warn("GameUI no tiene ExitDialog."); return; }
+            Transform panel = Named("Panel", game.ExitDialog.transform);
+            if (panel == null) { Warn("No se encontró el Panel del diálogo de salida."); return; }
+            if (SetSprite(panel, "CONFIGURACION/MARCO_DIALOGO", false) == null) return;
+            Layout(panel, Center, Vector2.zero, new Vector2(640, 364));
+            Text title = null, message = null;
+            foreach (Text text in panel.GetComponentsInChildren<Text>(true))
+            {
+                if (text.GetComponentInParent<Button>(true) != null) continue;
+                if (title == null) title = text; else if (message == null) message = text;
+            }
+            if (title != null)
+            {
+                // La pestaña ocupa el 54 % del ancho del marco, a 50 px (de 470) del borde superior.
+                Layout(title.transform, TopCenter, new Vector2(0, -39), new Vector2(340, 50));
+                Style(title, bold, 24, Cream, TextAnchor.MiddleCenter);
+                Outline outline = title.GetComponent<Outline>() ?? Undo.AddComponent<Outline>(title.gameObject);
+                Undo.RecordObject(outline, "Borde título"); outline.effectColor = Dark; outline.effectDistance = new Vector2(2, -2);
+            }
+            if (message != null)
+            {
+                Layout(message.transform, Center, new Vector2(0, 20), new Vector2(540, 60));
+                Style(message, regular, 24, Dark, TextAnchor.MiddleCenter);
+            }
+            float x = -135;
+            foreach (Button button in panel.GetComponentsInChildren<Button>(true))
+            {
+                Layout(button, Center, new Vector2(x, -85), new Vector2(230, 62)); x = -x;
+                Pill(button.transform, "CONFIGURACION/PILDORA_SLIDER", Cheese, 62);
+                Undo.RecordObject(button, "Botón diálogo");
+                ColorBlock colors = button.colors; colors.normalColor = Color.white; colors.highlightedColor = new Color(1, .95f, .85f);
+                colors.pressedColor = new Color(.85f, .75f, .6f); button.colors = colors;
+                Text label = button.GetComponentInChildren<Text>(true);
+                if (label != null) { Show(label.gameObject); Layout(label.transform, Center, Vector2.zero, new Vector2(220, 56)); Style(label, bold, 24, Dark, TextAnchor.MiddleCenter); }
             }
         }
         // Joystick abajo a la izquierda: base redonda y el queso como perilla (sin las flechas de antes).

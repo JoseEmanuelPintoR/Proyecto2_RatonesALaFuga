@@ -13,6 +13,8 @@ namespace Ratones.Basic
         public const float ArenaSize = 100, Radius = 1, Speed = 12, RoundTime = 120;
         public const float BoostTime = 4, BoostFactor = 1.5f, FreezeTime = 3, PickupRadius = 2.2f;
         public const float FoodRespawn = 3, PowerRespawn = 20, InputTimeout = .4f;
+        // Cuenta regresiva antes de cada ronda (la cámara la usa para mostrar la cocina y acercarse al ratón).
+        public const float CountdownTime = 3;
         public const float SpawnClearance = 2, PickupHeight = 1.25f;
         public const int TickRate = 30, SnapshotRate = 30, DiscoveryPort = 47777;
         public const int MaxQueuedInputs = 6, MaxPredictedInputs = 8;

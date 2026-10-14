@@ -50,4 +50,5 @@ MonoBehaviour:
   CollectClip: {fileID: 8300000, guid: e8f17799603be454aacb24662e4c80bf, type: 3}
   FreezeClip: {fileID: 8300000, guid: a50ac2239f97c2f418f05949e2990cca, type: 3}
   ClickClip: {fileID: 8300000, guid: 730abebd9fe6f074f95d654198f111db, type: 3}
-  SpeedClip: {fileID: 0}
+  SpeedClip: {fileID: 8300000, guid: 5c00b478a4323ea4d82510f94b6f2c21, type: 3}
+  SpeedVolume: 0.35
