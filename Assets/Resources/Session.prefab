@@ -47,5 +47,7 @@ MonoBehaviour:
   MenuMusic: {fileID: 8300000, guid: 440d30a7e7dbd514da005a1ebb8797da, type: 3}
   GameMusic: {fileID: 8300000, guid: d11d33c69a38b774fac6a32e5a123a47, type: 3}
   PodiumMusic: {fileID: 8300000, guid: 5e19e3febe407a64fbfb65e4f29cdb14, type: 3}
-  CollectClip: {fileID: 0}
-  PowerClip: {fileID: 0}
+  CollectClip: {fileID: 8300000, guid: e8f17799603be454aacb24662e4c80bf, type: 3}
+  FreezeClip: {fileID: 8300000, guid: a50ac2239f97c2f418f05949e2990cca, type: 3}
+  ClickClip: {fileID: 8300000, guid: 730abebd9fe6f074f95d654198f111db, type: 3}
+  SpeedClip: {fileID: 0}

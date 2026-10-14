@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
+using UnityEditor.Build;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -59,6 +60,8 @@ namespace Ratones.Basic.Editor
                 Apply(opened); total += warnings;
                 EditorSceneManager.SaveScene(opened);
             }
+            // Las auras del ratón y de los items también usan las imágenes de AURAS GRANDES.
+            ModelTools.ApplyAuras();
             if (!string.IsNullOrEmpty(current)) EditorSceneManager.OpenScene(current, OpenSceneMode.Single);
             Debug.Log("UI nueva aplicada y guardada en todas las escenas (" + total + " avisos).");
         }
@@ -77,8 +80,18 @@ namespace Ratones.Basic.Editor
             if (bold == null || regular == null || thin == null) { Debug.LogError("Falta Gluten-Bold, Gluten-Regular o Gluten-Thin en " + Fonts); return false; }
             // El juego es solo horizontal.
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.LandscapeLeft;
+            AppNameAndIcon();
             PlayerNameFont();
             return true;
+        }
+
+        // Nombre de la app y su ícono (PORTADA APK) para todas las plataformas.
+        static void AppNameAndIcon()
+        {
+            PlayerSettings.productName = "Ratones a la fuga";
+            Texture2D icon = AssetDatabase.LoadAssetAtPath<Texture2D>(Art + "PORTADA APK.png");
+            if (icon == null) { Debug.LogWarning("No se encontró " + Art + "PORTADA APK.png"); return; }
+            PlayerSettings.SetIcons(NamedBuildTarget.Unknown, new[] { icon }, IconKind.Any);
         }
 
         // El nombre sobre cada ratón (PlayerView) usa Gluten Bold.
@@ -156,6 +169,11 @@ namespace Ratones.Basic.Editor
             SkinButton("Personalizar", "MENU/BOTON_PERSONALIZAR");
             SkinButton("Configuración", "MENU/BOTON_CONFIGURACION");
             SkinButton("Salir", "MENU/BOTON_SALIR");
+            // El logo reemplaza al título de texto.
+            Transform title = Named("Titulo");
+            if (title == null) { Warn("No se encontró Titulo."); return; }
+            Layout(Decoration("Logo", "MENU/LOGO", title.parent, title.GetSiblingIndex()), Center, new Vector2(0, 185), new Vector2(440, 210));
+            Hide(title.gameObject);
         }
 
         static void Connection()
@@ -164,6 +182,14 @@ namespace Ratones.Basic.Editor
             Layout(SkinButton("Crear partida", "PARTIDA/BOTON_CREARPARTIDA"), Center, Vector2.zero, new Vector2(250, 120));
             Layout(SkinButton("Unirse", "PARTIDA/BOTON_UNIRSE"), Center, Vector2.zero, new Vector2(250, 120));
             Corner(SkinButton("Volver", "PARTIDA/BOTON_REGRESAR"), false);
+            // El banner JUGAR reemplaza al título de texto.
+            Text title = FindText("Jugar");
+            if (title != null)
+            {
+                Layout(Decoration("TituloJugar", "PARTIDA/TituloJugar", title.transform.parent, title.transform.GetSiblingIndex()), Center, new Vector2(0, 255), new Vector2(430, 122));
+                Hide(title.gameObject);
+            }
+            else if (Named("TituloJugar") == null) Warn("No se encontró el título Jugar.");
             // Quita Entrar y acomoda el desplegable: Unirse abre el código y, con código, entra.
             MenuTools.PrepareJoin();
         }
@@ -180,15 +206,28 @@ namespace Ratones.Basic.Editor
                 Layout(lobby.CodeText.transform, TopCenter, new Vector2(0, -155), new Vector2(600, 50));
                 Style(lobby.CodeText, regular, 30, Dark, TextAnchor.MiddleCenter);
             }
+            // Tarjetas un poco más abajo para que no las tape el código.
+            float[] slotX = { -435, -145, 145, 435 };
             for (int i = 1; i <= 4; i++)
             {
                 Transform slot = Named("Jugador" + i);
-                if (slot == null) Warn("No se encontró Jugador" + i); else SetSprite(slot, "INICIAR PARTIDA/MARCO_JUGADOR", false);
+                if (slot == null) { Warn("No se encontró Jugador" + i); continue; }
+                SetSprite(slot, "INICIAR PARTIDA/MARCO_JUGADOR", false);
+                Layout(slot, Center, new Vector2(slotX[i - 1], -20), new Vector2(235, 325));
             }
+            // La llave del color va como imagen encima del aura.
+            if (lobby.Keys != null)
+                foreach (Image key in lobby.Keys)
+                    if (key != null)
+                    {
+                        // Llave blanca: en un puesto vacío se tiñe de gris.
+                        SetSprite(key.transform, "LLAVES/LLAVE_BLANCA");
+                        Layout(key.transform, Center, new Vector2(0, 38), new Vector2(60, 60));
+                    }
             if (lobby.CodeText != null)
                 Layout(Decoration("TituloPartida", "INICIAR PARTIDA/TituloPartida", lobby.CodeText.transform.parent, 0), TopCenter, new Vector2(0, -70), new Vector2(430, 122));
             HostLabels(lobby);
-            Undo.RecordObject(lobby, "Auras"); lobby.AuraSprites = Auras();
+            Undo.RecordObject(lobby, "Auras"); lobby.AuraSprites = Auras(); lobby.KeySprites = KeySprites();
         }
 
         // Nombre del jugador en Thin y, debajo, "Anfitrión" en Bold (un Text por fuente: Unity no mezcla fuentes en uno).
@@ -236,7 +275,15 @@ namespace Ratones.Basic.Editor
             SkinButton("AURA", "PERSONALIZAR/AURA_PERSONALIZAR");
             SkinButton("Guardar", "PERSONALIZAR/BOTON_GUARDAR");
             Corner(SkinButton("Volver", "PERSONALIZAR/BOTON_REGRESAR"), false);
-            Undo.RecordObject(ui, "Auras"); ui.AuraSprites = Auras();
+            Sprite[] keys = KeySprites();
+            Undo.RecordObject(ui, "Auras"); ui.AuraSprites = Auras(); ui.KeySprites = keys;
+            // Las llaves ya se ven en la escena: vista previa (amarilla, la de por defecto) y un botón por color.
+            if (ui.KeyPreview != null) SetSprite(ui.KeyPreview.transform, "LLAVES/LLAVE_AMARILLA");
+            for (int i = 0; i < keys.Length; i++)
+            {
+                Transform color = Named("Color" + i);
+                if (color == null) Warn("No se encontró Color" + i); else SetSprite(color, "LLAVES/LLAVE_" + AuraNames[i]);
+            }
         }
 
         static void Settings()
@@ -600,6 +647,12 @@ namespace Ratones.Basic.Editor
         {
             var sprites = new Sprite[AuraNames.Length];
             for (int i = 0; i < sprites.Length; i++) sprites[i] = LoadSprite("AURAS/AURA_" + AuraNames[i]);
+            return sprites;
+        }
+        static Sprite[] KeySprites()
+        {
+            var sprites = new Sprite[AuraNames.Length];
+            for (int i = 0; i < sprites.Length; i++) sprites[i] = LoadSprite("LLAVES/LLAVE_" + AuraNames[i]);
             return sprites;
         }
         static Sprite LoadSprite(string name)

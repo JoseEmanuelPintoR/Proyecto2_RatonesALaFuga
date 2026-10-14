@@ -9,6 +9,8 @@ namespace Ratones.Basic
         // Una textura del ratón por color de llave, en el mismo orden que Palette.Colors.
         public Material[] KeyMaterials;
         public Renderer Aura;
+        // Imagen del aura (UI/AURAS GRANDES) por color, en el mismo orden que Palette.Colors; si falta se tiñe.
+        public Texture[] AuraTextures;
         // Fuente del nombre sobre el ratón ("J1:LAURA"); la asigna Ratones/UI nueva en el prefab.
         public Font NameFont;
         public float NameHeight = 1.6f;
@@ -93,7 +95,7 @@ namespace Ratones.Basic
             if (viewer != null) nameLabel.transform.rotation = viewer.transform.rotation;
         }
         // Animación por código (el modelo no tiene esqueleto): llave de cuerda, contoneo, respiración, bigotes,
-        // temblor al estar detenido y un saltito con giro al comer.
+        // temblor al estar detenido y un saltito al comer.
         void Animate(float dt)
         {
             float time = Time.time;
@@ -110,15 +112,14 @@ namespace Ratones.Basic
             float roll = walking ? Mathf.Sin(step) * 6 : 0, lean = walking ? 4 : 0;
             float shake = frozen ? Mathf.Sin(time * 60) * .04f : 0;
             float breathe = walking || frozen ? 1 : 1 + Mathf.Sin(time * 2.5f) * .02f;
-            float hopHeight = 0, hopSpin = 0;
+            float hopHeight = 0;
             if (hop > 0)
             {
                 hop = Mathf.Max(0, hop - dt);
-                float t = 1 - hop / HopTime;
-                hopHeight = Mathf.Sin(t * Mathf.PI) * .5f; hopSpin = t * 360;
+                hopHeight = Mathf.Sin((1 - hop / HopTime) * Mathf.PI) * .5f;
             }
             Visual.localPosition = new Vector3(shake, bounce + hopHeight, 0);
-            Visual.localRotation = Quaternion.Euler(lean, hopSpin, roll);
+            Visual.localRotation = Quaternion.Euler(lean, 0, roll);
             Visual.localScale = new Vector3(1, breathe, 1);
         }
         public void Show(Player player, Position? predicted = null)
@@ -143,7 +144,12 @@ namespace Ratones.Basic
         public void ShowColors(int key, int aura, bool frozen = false, bool boosted = false)
         {
             if (tint == null) Awake();
-            if (auraMaterial != null) auraMaterial.color = Palette.Colors[aura];
+            if (auraMaterial != null)
+            {
+                Texture image = AuraTextures != null && aura >= 0 && aura < AuraTextures.Length ? AuraTextures[aura] : null;
+                if (image != null) { auraMaterial.mainTexture = image; auraMaterial.color = Color.white; }
+                else auraMaterial.color = Palette.Colors[aura];
+            }
             if (Model == null) return;
             if (key != shownKey && KeyMaterials != null && key >= 0 && key < KeyMaterials.Length && KeyMaterials[key] != null)
             {

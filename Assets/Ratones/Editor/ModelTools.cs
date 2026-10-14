@@ -13,18 +13,23 @@ namespace Ratones.Basic.Editor
     public static class ModelTools
     {
         const string Models = "Assets/Ratones/Arte/Modelos/";
-        // Prefab, FBX, medida del lado más largo en metros y color del aura en el suelo.
-        // Chocolate (velocidad) y trampa (detener) usan el tinte que toma el ratón con ese poder.
-        static readonly (string item, string fbx, float size, Color aura)[] Items =
+        // Prefab, FBX, medida del lado más largo en metros e imagen del aura en el suelo (UI/AURAS GRANDES).
+        // Chocolate (velocidad) y trampa (detener) usan el color del tinte que toma el ratón con ese poder.
+        static readonly (string item, string fbx, float size, string aura)[] Items =
         {
-            ("Queso", "UVS QUESO.fbx", 2.2f, new Color(1, .85f, .1f)),
-            ("Fresa", "Fresa UVS.fbx", 2.4f, new Color(.95f, .15f, .2f)),
-            ("Pie", "Ponque_UVS.fbx", 3, new Color(1, .45f, .75f)),
-            ("Chocolate", "Chocolate_UVS.fbx", 3, Color.cyan),
-            ("Trampa", "Trampa_UVS.fbx", 3, new Color(.45f, .45f, 1)),
+            ("Queso", "UVS QUESO.fbx", 2.2f, "AMARILLA"),
+            ("Fresa", "Fresa UVS.fbx", 2.4f, "ROJA"),
+            ("Pie", "Ponque_UVS.fbx", 3, "ROSADA"),
+            ("Chocolate", "Chocolate_UVS.fbx", 3, "TURQUESA"),
+            ("Trampa", "Trampa_UVS.fbx", 3, "AZUL"),
         };
         // Altura del modelo sobre el suelo y diámetro del aura respecto al tamaño del item.
-        const float ItemLift = .15f, AuraScale = .55f;
+        const float ItemLift = .15f, AuraScale = .42f;
+        // Diámetro del aura del ratón (antes un cilindro de 2.6 m).
+        const float MouseAura = 1.9f;
+        const string AuraImages = "Assets/Ratones/UI/AURAS GRANDES/AURA_";
+        // Mismo orden que Palette.Colors.
+        static readonly string[] AuraColors = { "ROJA", "AZUL", "VERDE", "ROSADA", "NARANJA", "AMARILLA", "NEGRA", "BLANCA", "MORADA", "CAFE", "TURQUESA", "MENTA" };
 
         [MenuItem("Ratones/Preparar modelos de items")]
         public static void PrepareAll()
@@ -345,7 +350,48 @@ namespace Ratones.Basic.Editor
             AssetDatabase.SaveAssets();
         }
 
-        static void Prepare(string item, string fbx, float size, Color auraColor)
+        // Cambia los discos de color (cilindros) del ratón y de los items por las imágenes de AURAS GRANDES.
+        [MenuItem("Ratones/Aplicar auras con imagen")]
+        public static void ApplyAuras()
+        {
+            if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de aplicar las auras."); return; }
+            foreach (var entry in Items)
+            {
+                string prefabPath = "Assets/Ratones/Prefabs/" + entry.item + ".prefab";
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) == null) { Debug.LogWarning("No se encontró " + prefabPath); continue; }
+                GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
+                try { Aura(root.transform, entry.item, entry.size, entry.aura); PrefabUtility.SaveAsPrefabAsset(root, prefabPath); }
+                finally { PrefabUtility.UnloadPrefabContents(root); }
+            }
+            MouseAuras();
+            AssetDatabase.SaveAssets();
+            Debug.Log("Auras con imagen aplicadas al ratón y a los items.");
+        }
+        static void MouseAuras()
+        {
+            const string prefabPath = "Assets/Ratones/Prefabs/JugadorBasico.prefab";
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(prefabPath) == null) { Debug.LogWarning("No se encontró " + prefabPath); return; }
+            Texture[] textures = AuraColors.Select(AuraTexture).ToArray();
+            GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                PlayerView view = root.GetComponent<PlayerView>();
+                Transform aura = view.Aura != null ? view.Aura.transform : root.transform.Find("Aura");
+                if (aura == null) { Debug.LogWarning("JugadorBasico no tiene Aura."); return; }
+                ImageAura(aura, MouseAura, AuraMaterial("Plataforma", (Texture2D)textures[0]));
+                view.Aura = aura.GetComponent<MeshRenderer>(); view.AuraTextures = textures;
+                PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+            }
+            finally { PrefabUtility.UnloadPrefabContents(root); }
+        }
+        static Texture2D AuraTexture(string color)
+        {
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(AuraImages + color + ".png");
+            if (texture == null) Debug.LogWarning("No se encontró " + AuraImages + color + ".png");
+            return texture;
+        }
+
+        static void Prepare(string item, string fbx, float size, string auraColor)
         {
             var importer = AssetImporter.GetAtPath(fbx) as ModelImporter;
             if (importer == null) { Debug.LogError("No se encontró " + fbx); return; }
@@ -394,28 +440,35 @@ namespace Ratones.Basic.Editor
             finally { PrefabUtility.UnloadPrefabContents(root); }
         }
 
-        // Disco plano de color en el suelo bajo el item, como el aura del ratón (cilindro aplastado).
-        static void Aura(Transform root, string item, float size, Color color)
+        // Imagen del aura acostada en el suelo bajo el item, como el aura del ratón.
+        static void Aura(Transform root, string item, float size, string color)
         {
-            Transform previous = root.Find("Aura");
-            if (previous != null) Object.DestroyImmediate(previous.gameObject);
-            var aura = new GameObject("Aura", typeof(MeshFilter), typeof(MeshRenderer));
-            aura.transform.SetParent(root, false);
-            aura.GetComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Cylinder.fbx");
-            aura.transform.localPosition = new Vector3(0, .04f, 0);
-            aura.transform.localScale = new Vector3(size * AuraScale, .03f, size * AuraScale);
+            Transform aura = root.Find("Aura");
+            if (aura == null)
+            {
+                aura = new GameObject("Aura", typeof(MeshFilter), typeof(MeshRenderer)).transform;
+                aura.SetParent(root, false);
+            }
+            ImageAura(aura, size * AuraScale, AuraMaterial(item, AuraTexture(color)));
+        }
+        // Quad acostado (mira hacia arriba) con la imagen; reemplaza el cilindro aplastado de antes.
+        static void ImageAura(Transform aura, float diameter, Material material)
+        {
+            aura.GetComponent<MeshFilter>().sharedMesh = Resources.GetBuiltinResource<Mesh>("Quad.fbx");
+            aura.localPosition = new Vector3(0, .04f, 0); aura.localRotation = Quaternion.Euler(90, 0, 0);
+            aura.localScale = new Vector3(diameter, diameter, 1);
             var renderer = aura.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = AuraMaterial(item, color);
+            renderer.sharedMaterial = material;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off; renderer.receiveShadows = false;
         }
-        static Material AuraMaterial(string item, Color color)
+        // Sin luz para que se vea igual a la sombra; la imagen ya trae el color.
+        static Material AuraMaterial(string item, Texture2D texture)
         {
             string path = "Assets/Ratones/Materiales/Aura" + item + ".mat";
+            Shader shader = Shader.Find("Unlit/Transparent");
             Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
-            if (material == null) { material = new Material(Shader.Find("Standard")); AssetDatabase.CreateAsset(material, path); }
-            // Emisión del mismo color para que brille aunque esté a la sombra.
-            material.color = color; material.SetFloat("_Glossiness", 0);
-            material.EnableKeyword("_EMISSION"); material.SetColor("_EmissionColor", color * .6f);
+            if (material == null) { material = new Material(shader); AssetDatabase.CreateAsset(material, path); }
+            material.shader = shader; material.mainTexture = texture;
             material.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
             EditorUtility.SetDirty(material);
             return material;

@@ -19,5 +19,10 @@ namespace Ratones.Basic
             image.sprite = sprites[index]; image.color = Color.white; image.preserveAspect = true;
             return true;
         }
+        // Pone la imagen de la llave (UI/LLAVES, mismo orden que Colors). Devuelve false si no hay imagen.
+        public static bool SetKey(Image image, Sprite[] sprites, int index)
+        {
+            return SetAura(image, sprites, index);
+        }
     }
 }

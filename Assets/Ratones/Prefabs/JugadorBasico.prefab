@@ -67,8 +67,26 @@ MonoBehaviour:
   - {fileID: 2100000, guid: 9528070826179d147b7e243344a4a776, type: 2}
   - {fileID: 2100000, guid: 1683f8ddb8abe1148b2612aded37e032, type: 2}
   Aura: {fileID: 1016}
+  AuraTextures:
+  - {fileID: 2800000, guid: 0c13151fc5eeb9f4fa8f63e88c15354f, type: 3}
+  - {fileID: 2800000, guid: 6907531daf9247848b16cf0878fbc264, type: 3}
+  - {fileID: 2800000, guid: e5851bf461cde544db25ec47a9b79009, type: 3}
+  - {fileID: 2800000, guid: e7a5ce5316246504d850bba8aca023cb, type: 3}
+  - {fileID: 2800000, guid: ef85b2bb41a0f004188c69aa5ea49e24, type: 3}
+  - {fileID: 2800000, guid: 4b46cd7f5ca9f674a8c5005e4a16d585, type: 3}
+  - {fileID: 2800000, guid: 140f0ef6edc88684aafd75dccce3cdef, type: 3}
+  - {fileID: 2800000, guid: 9dc42df9786f7cf4c88c3241f3708697, type: 3}
+  - {fileID: 2800000, guid: e82028207465b7743b6861334a8f9b21, type: 3}
+  - {fileID: 2800000, guid: 6aee0b3537f04ce49a0626abe7baede6, type: 3}
+  - {fileID: 2800000, guid: 4724d8efd1eb95b45a1fdc6a18a98761, type: 3}
+  - {fileID: 2800000, guid: e508b3def2d26fe48a5d7d9f7e87fc43, type: 3}
   NameFont: {fileID: 12800000, guid: e2dc4386188386e4d9742a72a59ae943, type: 3}
   NameHeight: 1.6
+  KeyName: pCube3
+  WhiskersName: pCylinder5
+  KeyIdle: 0.25
+  KeyWalking: 1
+  KeyBoosted: 2
 --- !u!1 &1003
 GameObject:
   m_ObjectHideFlags: 0
@@ -127,9 +145,9 @@ Transform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1013}
   serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalRotation: {x: 0.7071068, y: 0, z: 0, w: 0.7071068}
   m_LocalPosition: {x: 0, y: 0.04, z: 0}
-  m_LocalScale: {x: 2.6, y: 0.03, z: 2.6}
+  m_LocalScale: {x: 1.9, y: 1.9, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1002}
@@ -141,7 +159,7 @@ MeshFilter:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1013}
-  m_Mesh: {fileID: 10206, guid: 0000000000000000e000000000000000, type: 0}
+  m_Mesh: {fileID: 10210, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!23 &1016
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -167,7 +185,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: ffef6ca8ab2602b0ce679ee85c2a8409, type: 2}
+  - {fileID: 2100000, guid: 7bc498fdbe03cf1458b352c0c8af59e9, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0

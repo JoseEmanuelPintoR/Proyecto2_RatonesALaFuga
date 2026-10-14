@@ -10,12 +10,12 @@ namespace Ratones.Basic
         public Image KeyPreview, AuraPreview;
         public Text Selected;
         public MousePreview Preview;
-        public Sprite[] AuraSprites;
+        public Sprite[] AuraSprites, KeySprites;
         readonly Button[] colorButtons = new Button[Rules.ColorCount];
         // Aspecto original de los botones de color (círculo teñido) para el modo LLAVE.
         readonly Sprite[] colorSprites = new Sprite[Rules.ColorCount];
         readonly Color[] colorTints = new Color[Rules.ColorCount];
-        Sprite auraCircle;
+        Sprite auraCircle, keySquare;
         int key, aura;
         bool editingAura;
         string warning = "";
@@ -37,7 +37,7 @@ namespace Ratones.Basic
                         if (button.image != null) { colorSprites[index] = button.image.sprite; colorTints[index] = button.image.color; }
                     }
                 }
-            auraCircle = AuraPreview.sprite;
+            auraCircle = AuraPreview.sprite; keySquare = KeyPreview.sprite;
             Refresh();
         }
         void Update() { RefreshTaken(); }
@@ -51,14 +51,14 @@ namespace Ratones.Basic
         }
         void Refresh()
         {
-            KeyPreview.color = Palette.Colors[key];
+            if (!Palette.SetKey(KeyPreview, KeySprites, key)) { KeyPreview.sprite = keySquare; KeyPreview.color = Palette.Colors[key]; }
             if (!Palette.SetAura(AuraPreview, AuraSprites, aura)) { AuraPreview.sprite = auraCircle; AuraPreview.color = Palette.Colors[aura]; }
-            // En modo AURA los botones muestran la imagen de cada aura; en modo LLAVE, el círculo de color.
+            // Los botones muestran la imagen de cada aura o llave según el modo; sin imagen, el círculo de color.
             for (int i = 0; i < colorButtons.Length; i++)
             {
                 Image image = colorButtons[i] != null ? colorButtons[i].image : null;
                 if (image == null) continue;
-                if (!editingAura || !Palette.SetAura(image, AuraSprites, i)) { image.sprite = colorSprites[i]; image.color = colorTints[i]; }
+                if (!(editingAura ? Palette.SetAura(image, AuraSprites, i) : Palette.SetKey(image, KeySprites, i))) { image.sprite = colorSprites[i]; image.color = colorTints[i]; }
             }
             Selected.text = warning != "" ? warning : "Color para: " + (editingAura ? "AURA" : "LLAVE");
             if (Preview != null) Preview.Show(key, aura);

@@ -2798,6 +2798,7 @@ MonoBehaviour:
   - {fileID: 21300000, guid: a8458601989973144b0e826c5cb6b1c5, type: 3}
   Fps: 25
   Loop: 0
+  Repeats: 3
 --- !u!114 &2132408223
 MonoBehaviour:
   m_ObjectHideFlags: 0

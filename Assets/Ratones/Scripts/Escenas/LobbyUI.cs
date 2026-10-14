@@ -13,9 +13,13 @@ namespace Ratones.Basic
         public Image[] Auras, Keys;
         public Button StartButton;
         public Button PersonalizeButton;
-        public Sprite[] AuraSprites;
-        Sprite[] emptyAuras;
-        void Awake() { emptyAuras = Auras.Select(a => a != null ? a.sprite : null).ToArray(); }
+        public Sprite[] AuraSprites, KeySprites;
+        Sprite[] emptyAuras, emptyKeys;
+        void Awake()
+        {
+            emptyAuras = Auras.Select(a => a != null ? a.sprite : null).ToArray();
+            emptyKeys = Keys.Select(k => k != null ? k.sprite : null).ToArray();
+        }
         void Start()
         {
             if (!Session.Ensure().Connected) { Session.Ensure().Go("Conexion"); return; }
@@ -90,7 +94,8 @@ namespace Ratones.Basic
                 if (hostLabel != null) hostLabel.text = host ? "Anfitrión" : "";
                 if (p == null) { Auras[i].sprite = emptyAuras[i]; Auras[i].color = Color.gray; }
                 else if (!Palette.SetAura(Auras[i], AuraSprites, p.AuraColor)) Auras[i].color = Palette.Colors[p.AuraColor];
-                Keys[i].color = p == null ? Color.gray : Palette.Colors[p.KeyColor];
+                if (p == null) { Keys[i].sprite = emptyKeys[i]; Keys[i].color = Color.gray; }
+                else if (!Palette.SetKey(Keys[i], KeySprites, p.KeyColor)) Keys[i].color = Palette.Colors[p.KeyColor];
             }
             int count = state.Players.Count(p => p.Connected), needed = session.Solo ? 1 : Rules.MinPlayers;
             StartButton.interactable = session.IsHost && count >= needed && state.Phase == Phase.Lobby;

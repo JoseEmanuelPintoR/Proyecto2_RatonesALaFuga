@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace Ratones.Basic
 {
@@ -9,8 +10,8 @@ namespace Ratones.Basic
     {
         public static Session Instance { get; private set; }
         public AudioClip MenuMusic, GameMusic, PodiumMusic;
-        public AudioClip CollectClip;
-        public AudioClip PowerClip;
+        // Efectos: recoger comida o poder, trampa (DETENER), clic de botones y velocidad (pendiente).
+        public AudioClip CollectClip, FreezeClip, ClickClip, SpeedClip;
         public State State { get; private set; }
         public int LocalId { get; private set; } = -1;
         public string RoomCode { get; private set; } = "";
@@ -32,6 +33,7 @@ namespace Ratones.Basic
         LanBeacon beacon;
         Phase? previousPhase;
         int previousRound = -1, previousScore;
+        Power previousInventory;
         float previousBoost, previousFreeze;
         bool loaded;
 
@@ -59,9 +61,17 @@ namespace Ratones.Basic
             Music = gameObject.AddComponent<AudioSource>(); Music.loop = true; Music.spatialBlend = 0;
             Effects = gameObject.AddComponent<AudioSource>(); Effects.spatialBlend = 0;
             ApplyVolume(); SceneManager.sceneLoaded += OnSceneLoaded;
-            PlayMusicFor(SceneManager.GetActiveScene().name); loaded = true;
+            PlayMusicFor(SceneManager.GetActiveScene().name); HookClicks(); loaded = true;
         }
-        void OnSceneLoaded(Scene scene, LoadSceneMode mode) { PlayMusicFor(scene.name); }
+        void OnSceneLoaded(Scene scene, LoadSceneMode mode) { PlayMusicFor(scene.name); HookClicks(); }
+        // Todos los botones de la escena suenan al tocarlos.
+        void HookClicks()
+        {
+            foreach (Button button in FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            { button.onClick.RemoveListener(PlayClick); button.onClick.AddListener(PlayClick); }
+        }
+        void PlayClick() { Play(ClickClip); }
+        void Play(AudioClip clip) { if (clip != null && Effects != null) Effects.PlayOneShot(clip); }
         // Juego y Resultados tienen su propia canción; el resto de escenas comparte la del menú.
         void PlayMusicFor(string scene)
         {
@@ -142,10 +152,15 @@ namespace Ratones.Basic
             Player player = State.Player(LocalId);
             if (player != null)
             {
-                if (player.Score > previousScore && CollectClip != null) Effects.PlayOneShot(CollectClip);
-                if ((player.BoostLeft > previousBoost + .5f || player.FreezeLeft > previousFreeze + .5f) && PowerClip != null) Effects.PlayOneShot(PowerClip);
-                previousScore = player.Score; previousBoost = player.BoostLeft; previousFreeze = player.FreezeLeft;
+                if (player.Score > previousScore || (player.Inventory & ~previousInventory) != 0) Play(CollectClip);
+                if (player.BoostLeft > previousBoost + .5f) Play(SpeedClip);
+                previousScore = player.Score; previousInventory = player.Inventory; previousBoost = player.BoostLeft;
             }
+            // La trampa congela a los rivales: suena para todos (quien la lanza y los detenidos).
+            float freeze = 0;
+            foreach (Player p in State.Players) if (p.Connected) freeze = Mathf.Max(freeze, p.FreezeLeft);
+            if (freeze > previousFreeze + .5f) Play(FreezeClip);
+            previousFreeze = freeze;
         }
         public void Move(Vector2 value)
         {
@@ -189,7 +204,7 @@ namespace Ratones.Basic
         {
             if (client != null) client.Dispose(); if (beacon != null) beacon.Dispose(); if (server != null) server.Dispose();
             client = null; beacon = null; server = null; State = null; LocalId = -1;
-            RoomCode = ""; previousPhase = null; previousRound = -1; previousScore = 0; previousBoost = previousFreeze = 0;
+            RoomCode = ""; previousPhase = null; previousRound = -1; previousScore = 0; previousInventory = 0; previousBoost = previousFreeze = 0;
             Status = ""; Solo = false;
         }
         void OnApplicationFocus(bool focused) { if (!focused) Move(Vector2.zero); }

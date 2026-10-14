@@ -643,6 +643,7 @@ MonoBehaviour:
   Offset: {x: 30, y: 45, z: -30}
   SmoothTime: 0.12
   Size: 14
+  ClipAhead: 16
 --- !u!1 &1028
 GameObject:
   m_ObjectHideFlags: 0
