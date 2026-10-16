@@ -14,6 +14,8 @@ namespace Ratones.Basic
         public Text Fourth;
         public GameObject FourthMedal;
         public Sprite[] AuraSprites;
+        // Ratón 3D girando sobre cada escalón (mismo orden que Podiums); ya trae su aura y su llave.
+        public MousePreview[] Previews;
         void Start()
         {
             Session session = Session.Ensure(); State state = session.State;
@@ -29,6 +31,9 @@ namespace Ratones.Basic
                 bool tie = players.Count(q => q.Score == p.Score) > 1;
                 Names[i].text = p.Name; Scores[i].text = p.Score + " puntos";
                 Places[i].text = place + ".º" + (tie ? " · empate" : "");
+                MousePreview preview = Previews != null && i < Previews.Length ? Previews[i] : null;
+                if (preview != null) { preview.gameObject.SetActive(true); preview.Show(p.KeyColor, p.AuraColor); }
+                Colors[i].enabled = preview == null;
                 if (!Palette.SetAura(Colors[i], AuraSprites, p.AuraColor)) Colors[i].color = Palette.Colors[p.AuraColor];
             }
             if (players.Count == 4)

@@ -30,7 +30,7 @@ namespace Ratones.Basic
         Spinner key, whiskers;
         const float HopTime = .35f;
 
-        // Gira una pieza del modelo alrededor de un eje que pasa por su centro, partiendo de su pose original.
+        // Gira una pieza del modelo alrededor de un eje que pasa por el pivote dado, partiendo de su pose original.
         sealed class Spinner
         {
             readonly Transform part;
@@ -60,16 +60,37 @@ namespace Ratones.Basic
                 if (r.name == KeyName) keyPart = r; else if (r.name == WhiskersName) whiskerPart = r;
                 else if (body == null || r.bounds.size.sqrMagnitude > body.bounds.size.sqrMagnitude) body = r;
             }
-            // La llave gira sobre su eje, que sale del cuerpo hacia atrás (horizontal respecto al ratón).
-            if (keyPart != null && body != null)
+            // La llave gira sobre su lado más largo (el que sale del cuerpo), con el pivote en la punta pegada al cuerpo.
+            if (keyPart != null && body != null) key = KeySpinner(keyPart, body);
+            // Los bigotes se mueven de lado a lado (eje vertical del ratón).
+            if (whiskerPart != null) whiskers = new Spinner(whiskerPart.transform, whiskerPart.bounds.center, Visual.up);
+        }
+        Spinner KeySpinner(Renderer keyPart, Renderer body)
+        {
+            Transform part = keyPart.transform;
+            MeshFilter filter = keyPart.GetComponent<MeshFilter>();
+            if (filter == null || filter.sharedMesh == null)
             {
                 Vector3 outward = Visual.InverseTransformDirection(keyPart.bounds.center - body.bounds.center);
                 outward.y = 0;
                 if (outward.sqrMagnitude < 1e-6f) outward = Vector3.back;
-                key = new Spinner(keyPart.transform, keyPart.bounds.center, Visual.TransformDirection(outward));
+                return new Spinner(part, keyPart.bounds.center, Visual.TransformDirection(outward));
             }
-            // Los bigotes se mueven de lado a lado (eje vertical del ratón).
-            if (whiskerPart != null) whiskers = new Spinner(whiskerPart.transform, whiskerPart.bounds.center, Visual.up);
+            // Eje local más largo de la malla, medido ya escalado en el mundo.
+            Bounds mesh = filter.sharedMesh.bounds;
+            Vector3 along = Vector3.zero; float longest = -1;
+            for (int i = 0; i < 3; i++)
+            {
+                Vector3 local = Vector3.zero; local[i] = mesh.size[i];
+                float length = part.TransformVector(local).magnitude;
+                if (length > longest) { longest = length; along = Vector3.zero; along[i] = mesh.extents[i]; }
+            }
+            Vector3 a = part.TransformPoint(mesh.center - along), b = part.TransformPoint(mesh.center + along);
+            // La punta es el extremo metido en el cuerpo (el más cercano a su centro).
+            Vector3 center = body.bounds.center;
+            bool aInside = (a - center).sqrMagnitude <= (b - center).sqrMagnitude;
+            Vector3 tip = aInside ? a : b, end = aInside ? b : a;
+            return new Spinner(part, tip, end - tip);
         }
         // Solo en partida: la vista de Personalizar usa el mismo prefab sin nombre.
         void SetName(string text, Color color)

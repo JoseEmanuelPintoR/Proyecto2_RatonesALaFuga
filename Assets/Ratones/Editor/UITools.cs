@@ -691,6 +691,9 @@ namespace Ratones.Basic.Editor
             Layout(Decoration("Podio", "PODIO/PODIO", parent, index), Center, new Vector2(0, -105), new Vector2(661, 293));
             // Centro y altura de cada escalón sobre la imagen del podio (orden lógico 1, 2, 3).
             Vector2[] steps = { new Vector2(0, 36), new Vector2(-214, -46), new Vector2(218, -80) };
+            var prefab = AssetDatabase.LoadAssetAtPath<PlayerView>(PlayerPrefab);
+            if (prefab == null) Warn("No se encontró " + PlayerPrefab + "; el podio queda sin ratones 3D.");
+            var previews = new MousePreview[podiums.Length];
             for (int i = 0; i < podiums.Length && i < steps.Length; i++)
             {
                 GameObject podium = podiums[i]; if (podium == null) continue;
@@ -703,10 +706,35 @@ namespace Ratones.Basic.Editor
                     if (aura.transform.parent != podium.transform) Undo.SetTransformParent(aura.transform, podium.transform, "Aura");
                     Layout(aura.transform, BottomCenter, new Vector2(0, 28), new Vector2(48, 48));
                 }
-                Stack(At(ui.Scores, i), podium.transform, 62, thin, 18);
-                Stack(At(ui.Names, i), podium.transform, 90, regular, 22);
+                // Con ratón 3D (parado sobre el escalón) los textos suben por encima de él.
+                bool mouse = prefab != null && (previews[i] = PodiumPreview(podium.transform, prefab)) != null;
+                Stack(At(ui.Scores, i), podium.transform, mouse ? 106 : 62, thin, 18);
+                Stack(At(ui.Names, i), podium.transform, mouse ? 132 : 90, regular, 22);
                 if (At(ui.Places, i) != null) Hide(ui.Places[i].gameObject);
             }
+            Undo.RecordObject(ui, "Ratones del podio"); ui.Previews = previews;
+        }
+        static MousePreview PodiumPreview(Transform podium, PlayerView prefab)
+        {
+            Transform existing = podium.Find("VistaRaton");
+            GameObject go;
+            if (existing != null) go = existing.gameObject;
+            else
+            {
+                go = new GameObject("VistaRaton", typeof(RectTransform), typeof(RawImage), typeof(MousePreview));
+                Undo.RegisterCreatedObjectUndo(go, "Crear ratón del podio");
+                go.transform.SetParent(podium, false);
+            }
+            Layout(go.transform, BottomCenter, new Vector2(0, -4), new Vector2(110, 100), BottomCenter);
+            RawImage raw = go.GetComponent<RawImage>();
+            Undo.RecordObject(raw, "Ratón del podio"); raw.texture = null; raw.color = Color.clear; raw.raycastTarget = false;
+            MousePreview preview = go.GetComponent<MousePreview>();
+            Undo.RecordObject(preview, "Ratón del podio");
+            preview.Prefab = prefab; preview.Target = raw; preview.Resolution = 256;
+            // Mismo encuadre que en el lobby: el ratón completo con su aura debajo.
+            preview.CameraPosition = new Vector3(0, 2.6f, 4.6f); preview.LookHeight = .7f;
+            Show(go);
+            return preview;
         }
         static void Stack(Text text, Transform podium, float y, Font font, int size)
         {
