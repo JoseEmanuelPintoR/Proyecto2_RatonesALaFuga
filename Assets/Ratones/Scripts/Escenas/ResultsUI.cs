@@ -41,8 +41,10 @@ namespace Ratones.Basic
                 Player p = players[3]; int place = 1 + players.Count(q => q.Score > p.Score);
                 Fourth.text = place + ".º  " + p.Name + "  ·  " + p.Score + " puntos";
             }
+            // Modo solo: un 4.º puesto de ejemplo para ver cómo queda.
+            else if (session.Solo) Fourth.text = "4.º  Ratón de prueba  ·  0 puntos";
             else Fourth.text = "";
-            if (FourthMedal != null) FourthMedal.SetActive(players.Count == 4);
+            if (FourthMedal != null) FourthMedal.SetActive(players.Count == 4 || session.Solo);
         }
         public void Lobby() { Session.Ensure().BackToLobby(); }
         public void Menu() { Session.Ensure().LeaveToMenu(); }

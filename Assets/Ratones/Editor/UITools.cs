@@ -153,9 +153,9 @@ namespace Ratones.Basic.Editor
         {
             var bolds = new HashSet<Text>(); var regulars = new HashSet<Text>(); var thins = new HashSet<Text>();
             var results = Find<ResultsUI>();
-            if (results != null) { bolds.Add(results.Title); Add(regulars, results.Names); Add(regulars, results.Places); Add(thins, results.Scores); thins.Add(results.Fourth); }
+            if (results != null) { bolds.Add(results.Title); Add(regulars, results.Names); Add(regulars, results.Places); Add(thins, results.Scores); bolds.Add(results.Fourth); }
             var game = Find<GameUI>();
-            if (game != null) { bolds.Add(game.Timer); bolds.Add(game.Countdown); Add(regulars, game.PlayerLabels); thins.Add(game.OwnScore); thins.Add(game.Inventory); }
+            if (game != null) { bolds.Add(game.Timer); bolds.Add(game.Countdown); Add(regulars, game.PlayerLabels); thins.Add(game.OwnScore); bolds.Add(game.Inventory); }
             var lobby = Find<LobbyUI>();
             if (lobby != null) { regulars.Add(lobby.CodeText); Add(thins, lobby.Names); thins.Add(lobby.Message); }
             var nav = Find<NavigationUI>();
@@ -537,6 +537,13 @@ namespace Ratones.Basic.Editor
                 Layout(game.OwnScore.transform, TopLeft, new Vector2(128, -205), new Vector2(240, 60));
                 Style(game.OwnScore, thin, 22, Dark, TextAnchor.MiddleCenter);
             }
+            // "¡DETENIDO!" grande al centro del mapa.
+            if (game.Inventory != null)
+            {
+                Layout(game.Inventory.transform, Center, Vector2.zero, new Vector2(900, 120));
+                Style(game.Inventory, bold, 64, new Color(.12f, .12f, .12f), TextAnchor.MiddleCenter);
+                Undo.RecordObject(game.Inventory, "Aviso detenido"); game.Inventory.raycastTarget = false;
+            }
         }
         // "¿Salir de la partida?": marco de madera (MARCO_CONFIGURACION sin su título), el título sobre la pestaña
         // de cuadros y los dos botones como píldoras amarillas de queso.
@@ -670,8 +677,9 @@ namespace Ratones.Basic.Editor
             Podium(ui);
             if (ui.Fourth != null)
             {
-                Layout(ui.Fourth.transform, Center, new Vector2(20, -296), new Vector2(400, 40));
-                Style(ui.Fourth, regular, 22, Dark, TextAnchor.MiddleCenter);
+                // Blanco suave: va sobre el piso oscuro de FONDO_PODIO.
+                Layout(ui.Fourth.transform, Center, new Vector2(20, -296), new Vector2(400, 48));
+                Style(ui.Fourth, bold, 30, new Color(.94f, .94f, .94f), TextAnchor.MiddleCenter);
                 var fitter = ui.Fourth.GetComponent<ContentSizeFitter>() ?? Undo.AddComponent<ContentSizeFitter>(ui.Fourth.gameObject);
                 Undo.RecordObject(fitter, "Ajustar 4.º"); fitter.horizontalFit = ContentSizeFitter.FitMode.PreferredSize;
                 Image medal = Decoration("Medalla", "PODIO/MEDALLA_ULTIMOPUESTO", ui.Fourth.transform, 0);
@@ -708,8 +716,8 @@ namespace Ratones.Basic.Editor
                 }
                 // Con ratón 3D (parado sobre el escalón) los textos suben por encima de él.
                 bool mouse = prefab != null && (previews[i] = PodiumPreview(podium.transform, prefab)) != null;
-                Stack(At(ui.Scores, i), podium.transform, mouse ? 106 : 62, thin, 18);
-                Stack(At(ui.Names, i), podium.transform, mouse ? 132 : 90, regular, 22);
+                Stack(At(ui.Scores, i), podium.transform, mouse ? 74 : 62, thin, 18);
+                Stack(At(ui.Names, i), podium.transform, mouse ? 100 : 90, regular, 22);
                 if (At(ui.Places, i) != null) Hide(ui.Places[i].gameObject);
             }
             Undo.RecordObject(ui, "Ratones del podio"); ui.Previews = previews;
@@ -725,7 +733,8 @@ namespace Ratones.Basic.Editor
                 Undo.RegisterCreatedObjectUndo(go, "Crear ratón del podio");
                 go.transform.SetParent(podium, false);
             }
-            Layout(go.transform, BottomCenter, new Vector2(0, -4), new Vector2(110, 100), BottomCenter);
+            // Más abajo que el escalón: el render deja aire bajo el aura y así el ratón se para sobre el mantel.
+            Layout(go.transform, BottomCenter, new Vector2(0, -36), new Vector2(110, 100), BottomCenter);
             RawImage raw = go.GetComponent<RawImage>();
             Undo.RecordObject(raw, "Ratón del podio"); raw.texture = null; raw.color = Color.clear; raw.raycastTarget = false;
             MousePreview preview = go.GetComponent<MousePreview>();

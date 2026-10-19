@@ -18,6 +18,8 @@ namespace Ratones.Basic
         public GameObject ExitDialog;
         float sendClock;
         bool dialogOpen;
+        // Modo solo: la trampa no tiene a quién detener; al usarla se muestra el aviso "¡DETENIDO!" para verlo.
+        float soloFreezePreview;
         void Update()
         {
             Session session = Session.Ensure(); State state = session.State;
@@ -37,7 +39,9 @@ namespace Ratones.Basic
             int seconds = Mathf.CeilToInt(state.TimeLeft);
             Timer.text = (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
             OwnScore.text = "Puntos: " + own.Score + "\nAlimentos: " + own.Collected;
-            Inventory.text = own.FreezeLeft > 0 ? "Detenido: " + own.FreezeLeft.ToString("0.0") + " s" : "";
+            soloFreezePreview = Mathf.Max(0, soloFreezePreview - Time.unscaledDeltaTime);
+            float frozen = Mathf.Max(own.FreezeLeft, soloFreezePreview);
+            Inventory.text = frozen > 0 ? "¡DETENIDO! " + frozen.ToString("0.0") + " s" : "";
             Countdown.text = state.Phase == Phase.Countdown ? Mathf.CeilToInt(state.CountdownLeft).ToString() : "";
             bool canAct = state.Phase == Phase.Playing && own.FreezeLeft <= 0 && !dialogOpen;
             SpeedButton.interactable = canAct && own.Has(Power.Speed) && own.BoostLeft <= 0;
@@ -52,7 +56,7 @@ namespace Ratones.Basic
                 if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow)) input.y -= 1;
                 if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) input.x -= 1;
                 if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) input.x += 1;
-                if (Input.GetKeyDown(KeyCode.E)) session.UseSpeed(); if (Input.GetKeyDown(KeyCode.Q)) session.UseFreeze();
+                if (Input.GetKeyDown(KeyCode.E)) session.UseSpeed(); if (Input.GetKeyDown(KeyCode.Q)) Freeze();
                 if (Input.GetKeyDown(KeyCode.Escape)) ShowExit();
             }
             input = Vector2.ClampMagnitude(input, 1);
@@ -64,7 +68,13 @@ namespace Ratones.Basic
             while (sendClock >= interval) { sendClock -= interval; session.Move(new Vector2(world.x, world.z)); }
         }
         public void Speed() { Session.Ensure().UseSpeed(); }
-        public void Freeze() { Session.Ensure().UseFreeze(); }
+        public void Freeze()
+        {
+            Session session = Session.Ensure();
+            Player own = session.State != null ? session.State.Player(session.LocalId) : null;
+            if (session.Solo && own != null && own.Has(Power.Freeze) && own.FreezeLeft <= 0) soloFreezePreview = Rules.FreezeTime;
+            session.UseFreeze();
+        }
         public void ShowExit()
         { dialogOpen = true; if (Stick != null) Stick.Clear(); Session.Ensure().Move(Vector2.zero); ExitDialog.SetActive(true); }
         public void CancelExit() { dialogOpen = false; ExitDialog.SetActive(false); }

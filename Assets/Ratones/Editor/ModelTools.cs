@@ -56,16 +56,21 @@ namespace Ratones.Basic.Editor
 
         // La cocina es decoración: la zona de juego (cuadro rosado) queda en la arena de 100 x 100 con la madera en y = 0.
         // Las colisiones siguen siendo las de ArenaLayout (RampasYObstaculos y los límites), con la textura de la madera.
-        // Cocina nueva (cocina 2): sus materiales con las texturas de "cocina 2/textures".
-        [MenuItem("Ratones/Preparar cocina")]
-        public static void PrepareKitchen() { BuildKitchen(Models + "cocina 2/ModeloCocina.fbx", false); }
+        // Cocina nueva (cocinav3): la cocina 2 con texturas de Substance (UVS_<material>_AlbedoTransparency, Normal, etc.).
+        [MenuItem("Ratones/Preparar cocina v3")]
+        public static void PrepareKitchenV3() { BuildKitchen(Models + "cocinav3/cocina_22222.fbx", false, r => SubstanceKitchenMaterials(r, "cocinav3/UVS_", "Cocina3")); }
+        // Cocina 2: sus materiales con las texturas de "cocina 2/textures".
+        const string Cocina2 = Models + "cocina 2/ModeloCocina.fbx";
+        [MenuItem("Ratones/Preparar cocina 2")]
+        public static void PrepareKitchen2() { BuildKitchen(Cocina2, false, r => TexturedKitchenMaterials(Cocina2, r)); }
         // Cocina anterior (Substance): materiales armados con sus texturas BaseMap, Normal, etc.
         [MenuItem("Ratones/Preparar cocina anterior")]
-        public static void PrepareOldKitchen() { BuildKitchen(Models + "Cocina/Cocina_UVS.fbx", true); }
-        // Malla del piso de la cocina nueva ("nền nhà"): la zona de juego empieza en su centro.
+        public static void PrepareOldKitchen() { BuildKitchen(Models + "Cocina/Cocina_UVS.fbx", true, r => SubstanceKitchenMaterials(r, "Cocina/Cocina_UVS_", "CocinaModelo")); }
+        // Malla del piso de la cocina 2 y la v3 ("nền nhà"): la zona de juego empieza en su centro.
         const string PisoCocina2 = "nen_nha";
 
-        static void BuildKitchen(string fbx, bool substance)
+        // oldLayout: la cocina anterior, que ubica la zona con sus puntos de referencia y no se gira.
+        static void BuildKitchen(string fbx, bool oldLayout, System.Action<Renderer[]> materials)
         {
             if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de preparar la cocina."); return; }
             Scene scene = SceneManager.GetActiveScene();
@@ -90,20 +95,20 @@ namespace Ratones.Basic.Editor
             Renderer[] renderers = model.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) { Debug.LogError(Path.GetFileName(fbx) + " no tiene mallas."); return; }
             foreach (Renderer r in renderers) r.gameObject.isStatic = true;
-            if (substance) SubstanceKitchenMaterials(renderers); else TexturedKitchenMaterials(fbx, renderers);
+            materials(renderers);
             // Primero a un tamaño cómodo para medir (lado más largo = arena); el ajuste final lo hace la zona.
             Bounds bounds = WorldBounds(renderers);
             float longest = Mathf.Max(bounds.size.x, bounds.size.z);
             if (longest > 0) root.transform.localScale *= Rules.ArenaSize / longest;
             Renderer floor = renderers.FirstOrDefault(r => r.name == PisoCocina2);
-            if (!substance) OrientKitchen(model.transform, renderers, floor);
+            if (!oldLayout) OrientKitchen(model.transform, renderers, floor);
             bounds = WorldBounds(renderers);
 
             var zone = new GameObject("ZonaDeJuego", typeof(ZonaDeJuego)).transform;
             zone.SetParent(root.transform, false);
             Vector2 center, axisX, axisZ;
             Vector3 freeCenter; float freeSide;
-            if (substance && FbxToScene(model.transform, out center, out axisX, out axisZ))
+            if (oldLayout && FbxToScene(model.transform, out center, out axisX, out axisZ))
             {
                 Vector2 world = center + axisX * ZonaCentro.x + axisZ * ZonaCentro.y;
                 float side = ZonaLado * Mathf.Sqrt(Mathf.Abs(axisX.x * axisZ.y - axisX.y * axisZ.x));
@@ -266,12 +271,13 @@ namespace Ratones.Basic.Editor
             floor.sharedMaterials = shared;
         }
 
-        static void SubstanceKitchenMaterials(Renderer[] renderers)
+        // Un material "<materialName>_<material del FBX>" con las texturas "<texturePrefix><material>_<mapa>.png".
+        static void SubstanceKitchenMaterials(Renderer[] renderers, string texturePrefix, string materialName)
         {
             string[] slots = renderers.SelectMany(r => r.sharedMaterials).Where(m => m != null).Select(m => m.name).Distinct().ToArray();
             var materials = new Dictionary<string, Material>();
             foreach (string slot in slots)
-                materials[slot] = CreateMaterial(slots.Length == 1 ? "CocinaModelo" : "CocinaModelo_" + Clean(slot).Trim('_'), "Cocina/Cocina_UVS_" + Clean(slot) + "_", 4096);
+                materials[slot] = CreateMaterial(slots.Length == 1 ? materialName : materialName + "_" + Clean(slot).Trim('_'), texturePrefix + Clean(slot) + "_", 4096);
             foreach (Renderer r in renderers)
             {
                 Material[] shared = r.sharedMaterials;
@@ -292,7 +298,7 @@ namespace Ratones.Basic.Editor
         {
             if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de ajustar la cocina."); return; }
             GameObject root = SceneManager.GetActiveScene().GetRootGameObjects().FirstOrDefault(g => g.name == "Cocina");
-            if (root == null || root.GetComponentInChildren<ZonaDeJuego>() == null) { Debug.LogWarning("Primero usa Ratones/Preparar cocina en la escena Juego."); return; }
+            if (root == null || root.GetComponentInChildren<ZonaDeJuego>() == null) { Debug.LogWarning("Primero usa Ratones/Preparar cocina v3 en la escena Juego."); return; }
             Undo.RecordObject(root.transform, "Ajustar cocina");
             Undo.RecordObject(root.GetComponentInChildren<ZonaDeJuego>().transform, "Ajustar cocina");
             FitKitchen(root.transform);
@@ -305,7 +311,7 @@ namespace Ratones.Basic.Editor
             Scene scene = root.gameObject.scene;
             Transform zone = root.GetComponentInChildren<ZonaDeJuego>().transform;
             Transform model = root.Find("Modelo");
-            if (model == null) { Debug.LogError("Falta Cocina/Modelo: usa Ratones/Preparar cocina."); return; }
+            if (model == null) { Debug.LogError("Falta Cocina/Modelo: usa Ratones/Preparar cocina v3."); return; }
             model.gameObject.SetActive(true);
             foreach (Transform extra in model.GetComponentsInChildren<Transform>(true).Where(t => t.name == PisoExtra).ToArray())
                 Object.DestroyImmediate(extra.gameObject);
