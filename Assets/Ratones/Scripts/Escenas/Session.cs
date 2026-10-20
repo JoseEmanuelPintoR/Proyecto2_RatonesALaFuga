@@ -34,8 +34,8 @@ namespace Ratones.Basic
         GameClient client;
         LanBeacon beacon;
         Phase? previousPhase;
-        int previousRound = -1, previousScore;
-        Power previousInventory;
+        int previousRound = -1;
+        readonly PickupFeedback pickupFeedback = new PickupFeedback();
         float previousBoost, previousFreeze;
         bool loaded;
 
@@ -72,7 +72,7 @@ namespace Ratones.Basic
             foreach (Button button in FindObjectsByType<Button>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             { button.onClick.RemoveListener(PlayClick); button.onClick.AddListener(PlayClick); }
         }
-        void PlayClick() { Play(ClickClip); }
+        public void PlayClick() { Play(ClickClip); }
         void Play(AudioClip clip, float volume = 1) { if (clip != null && Effects != null) Effects.PlayOneShot(clip, volume); }
         // Juego y Resultados tienen su propia canción; el resto de escenas comparte la del menú.
         void PlayMusicFor(string scene)
@@ -154,9 +154,9 @@ namespace Ratones.Basic
             Player player = State.Player(LocalId);
             if (player != null)
             {
-                if (player.Score > previousScore || (player.Inventory & ~previousInventory) != 0) Play(CollectClip);
+                if (pickupFeedback.Poll(State, LocalId)) { Play(CollectClip); MobileHaptics.Pickup(); }
                 if (player.BoostLeft > previousBoost + .5f) Play(SpeedClip, SpeedVolume);
-                previousScore = player.Score; previousInventory = player.Inventory; previousBoost = player.BoostLeft;
+                previousBoost = player.BoostLeft;
             }
             // La trampa congela a los rivales: suena para todos (quien la lanza y los detenidos).
             float freeze = 0;
@@ -178,10 +178,20 @@ namespace Ratones.Basic
         }
         public void UseSpeed() { Use(Power.Speed); }
         public void UseFreeze() { Use(Power.Freeze); }
-        void Use(Power power)
+        public bool UseFreeze(int targetId) { return Use(Power.Freeze, targetId); }
+        public bool FreezePending
         {
-            if (server != null) server.Simulation.Use(LocalId, power);
-            if (client != null) client.Use(power);
+            get
+            {
+                if (client != null) return client.FreezePending;
+                Player own = State == null ? null : State.Player(LocalId);
+                return own != null && own.WantsFreeze;
+            }
+        }
+        bool Use(Power power, int targetId = Rules.AllRivals)
+        {
+            if (server != null) return server.Simulation.Use(LocalId, power, targetId);
+            return client != null && client.Use(power, targetId);
         }
         public void StartRound() { if (server != null) server.Simulation.Start(LocalId); }
         public void BackToLobby()
@@ -206,7 +216,8 @@ namespace Ratones.Basic
         {
             if (client != null) client.Dispose(); if (beacon != null) beacon.Dispose(); if (server != null) server.Dispose();
             client = null; beacon = null; server = null; State = null; LocalId = -1;
-            RoomCode = ""; previousPhase = null; previousRound = -1; previousScore = 0; previousInventory = 0; previousBoost = previousFreeze = 0;
+            RoomCode = ""; previousPhase = null; previousRound = -1; previousBoost = previousFreeze = 0;
+            pickupFeedback.Reset();
             Status = ""; Solo = false;
         }
         void OnApplicationFocus(bool focused) { if (!focused) Move(Vector2.zero); }

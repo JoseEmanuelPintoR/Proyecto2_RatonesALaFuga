@@ -102,8 +102,8 @@ namespace Ratones.Basic
             }
             if (p[0] == "MOVE" && p.Length == 5)
                 Simulation.ReceiveInput(peer.Id, int.Parse(p[1]), int.Parse(p[2]), Protocol.Float(p[3]), Protocol.Float(p[4]));
-            if (p[0] == "POWER" && p.Length == 2)
-            { int power = int.Parse(p[1]); if (power == 1 || power == 2) Simulation.Use(peer.Id, (Power)power); }
+            if (p[0] == "POWER" && p.Length == 5)
+                Simulation.RequestPower(peer.Id, int.Parse(p[1]), int.Parse(p[2]), (Power)int.Parse(p[3]), int.Parse(p[4]));
         }
         static void Reject(Peer peer, string reason)
         { peer.Socket.Send("ERROR|" + Protocol.Encode(reason)); peer.Closing = .35f; }

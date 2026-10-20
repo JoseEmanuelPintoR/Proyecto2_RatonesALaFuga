@@ -20,6 +20,11 @@ namespace Ratones.Basic
         public readonly LocalPrediction Prediction = new LocalPrediction();
         public float LatencyMilliseconds { get; private set; }
         int worldAck = -1, pingSequence;
+        int powerRound = -1, powerSequence, freezeRequest;
+        public bool FreezePending
+        {
+            get { Player p = State == null ? null : State.Player(Id); return p != null && freezeRequest > p.LastPowerRequest; }
+        }
         long pingStarted;
         float silence, heartbeat;
         public bool Ready { get { return Id >= 0 && State != null; } }
@@ -69,6 +74,8 @@ namespace Ratones.Basic
                     else if (line.StartsWith("S|"))
                     {
                         State = Protocol.Parse(line, State);
+                        if (powerRound != State.Round)
+                        { powerRound = State.Round; powerSequence = freezeRequest = 0; }
                         Prediction.Reconcile(State.Player(Id), State.Round, State.Phase == Phase.Playing);
                         if (worldAck != State.WorldRevision)
                         { worldAck = State.WorldRevision; s.Send("ACK_WORLD|" + worldAck); }
@@ -89,8 +96,20 @@ namespace Ratones.Basic
                 socket.Send("MOVE|" + State.Round + "|" + frame.Sequence + "|" + Protocol.Num(frame.X) + "|" + Protocol.Num(frame.Z));
             }
         }
-        public void Use(Power power)
-        { lock (gate) if (socket != null && Ready) socket.Send("POWER|" + (int)power); }
+        public bool Use(Power power, int targetId = Rules.AllRivals)
+        {
+            lock (gate)
+            {
+                if (socket == null || !Ready || State.Phase != Phase.Playing) return false;
+                Player own = State.Player(Id);
+                if (own == null || !own.Connected || own.FreezeLeft > 0 || !own.Has(power)) return false;
+                if (power == Power.Freeze && FreezePending) return false;
+                int sequence = ++powerSequence;
+                if (power == Power.Freeze) freezeRequest = sequence;
+                socket.Send("POWER|" + State.Round + "|" + sequence + "|" + (int)power + "|" + targetId);
+                return true;
+            }
+        }
         public void UpdateProfile(string name, int key, int aura)
         {
             lock (gate) if (socket != null && Ready)

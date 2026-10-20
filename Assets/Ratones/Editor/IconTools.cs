@@ -1,6 +1,5 @@
 using System.IO;
 using UnityEditor;
-using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEngine;
 
@@ -23,23 +22,117 @@ namespace Ratones.Basic.Editor
         [MenuItem("Ratones/Preparar icono Android")]
         public static void PrepareIcon()
         {
-            Texture2D portada = Load(Portada), logo = Load(Logo);
-            if (portada == null || logo == null) { Debug.LogError("Faltan " + Portada + " o " + Logo); return; }
-            Directory.CreateDirectory(Carpeta);
-            Texture2D fondo = Save(Wood(portada), "ICONO_FONDO.png");
-            Texture2D frente = Save(WithLogo(new Texture2D(Lado, Lado, TextureFormat.RGBA32, false), logo, LogoAdaptativo, true), "ICONO_FRENTE.png");
-            Texture2D redondo = Save(WithLogo(Wood(portada), logo, LogoRedondo, false), "ICONO_REDONDO.png");
-            Object.DestroyImmediate(portada); Object.DestroyImmediate(logo);
-
-            // Adaptativo: capa 0 el fondo y capa 1 el frente. Redondo y Legacy son para launchers sin capas.
             var target = NamedBuildTarget.Android;
-            PlatformIcon[] adaptive = PlayerSettings.GetPlatformIcons(target, AndroidPlatformIconKind.Adaptive);
-            foreach (PlatformIcon icon in adaptive) icon.SetTextures(fondo, frente);
-            PlayerSettings.SetPlatformIcons(target, AndroidPlatformIconKind.Adaptive, adaptive);
-            SetAll(target, AndroidPlatformIconKind.Round, redondo);
-            SetAll(target, AndroidPlatformIconKind.Legacy, AssetDatabase.LoadAssetAtPath<Texture2D>(Portada));
+
+            PlatformIconKind[] tipos =
+                PlayerSettings.GetSupportedIconKinds(target);
+
+            if (tipos == null || tipos.Length == 0)
+            {
+                Debug.LogWarning(
+                    "Este editor no tiene disponibles los tipos de icono Android. " +
+                    "Para preparar el APK, revisa que Android Build Support " +
+                    "esté instalado para esta versión de Unity."
+                );
+                return;
+            }
+
+            Texture2D portada = Load(Portada);
+            Texture2D logo = Load(Logo);
+
+            if (portada == null || logo == null)
+            {
+                if (portada != null) Object.DestroyImmediate(portada);
+                if (logo != null) Object.DestroyImmediate(logo);
+
+                Debug.LogError("Faltan " + Portada + " o " + Logo);
+                return;
+            }
+
+            Directory.CreateDirectory(Carpeta);
+
+            Texture2D fondo = Save(
+                Wood(portada),
+                "ICONO_FONDO.png"
+            );
+
+            Texture2D frente = Save(
+                WithLogo(
+                    new Texture2D(Lado, Lado, TextureFormat.RGBA32, false),
+                    logo,
+                    LogoAdaptativo,
+                    true
+                ),
+                "ICONO_FRENTE.png"
+            );
+
+            Texture2D redondo = Save(
+                WithLogo(Wood(portada), logo, LogoRedondo, false),
+                "ICONO_REDONDO.png"
+            );
+
+            Object.DestroyImmediate(portada);
+            Object.DestroyImmediate(logo);
+
+            Texture2D legacy =
+                AssetDatabase.LoadAssetAtPath<Texture2D>(Portada);
+
+            int configurados = 0;
+
+            foreach (PlatformIconKind tipo in tipos)
+            {
+                string nombre = tipo.ToString();
+
+                if (nombre.IndexOf(
+                        "Adaptive",
+                        System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    PlatformIcon[] iconos =
+                        PlayerSettings.GetPlatformIcons(target, tipo);
+
+                    foreach (PlatformIcon icono in iconos)
+                    {
+                        // Capa 0: fondo. Capa 1: logo.
+                        icono.SetTextures(fondo, frente);
+                    }
+
+                    PlayerSettings.SetPlatformIcons(target, tipo, iconos);
+                }
+                else if (nombre.IndexOf(
+                             "Round",
+                             System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    SetAll(target, tipo, redondo);
+                }
+                else if (nombre.IndexOf(
+                             "Legacy",
+                             System.StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    SetAll(target, tipo, legacy);
+                }
+                else
+                {
+                    continue;
+                }
+
+                configurados++;
+            }
+
             AssetDatabase.SaveAssets();
-            Debug.Log("Listo: ícono adaptativo de Android (madera de fondo y logo al centro). Vuelve a generar el APK.");
+
+            if (configurados > 0)
+            {
+                Debug.Log(
+                    "Listo: se configuraron " + configurados +
+                    " tipos de icono Android. Vuelve a generar el APK."
+                );
+            }
+            else
+            {
+                Debug.LogWarning(
+                    "No se reconocieron los tipos de icono Android disponibles."
+                );
+            }
         }
 
         static void SetAll(NamedBuildTarget target, PlatformIconKind kind, Texture2D texture)

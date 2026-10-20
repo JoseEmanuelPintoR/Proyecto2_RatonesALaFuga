@@ -11,7 +11,9 @@ namespace Ratones.Basic
         public const int MinActiveFood = 20;
         public const int PowerCount = 8, ColorCount = 12;
         public const float ArenaSize = 100, Radius = 1, Speed = 12, RoundTime = 120;
-        public const float BoostTime = 4, BoostFactor = 1.5f, FreezeTime = 3, PickupRadius = 2.2f;
+        public const float BoostTime = 4, BoostFactor = 1.5f, PickupRadius = 2.2f;
+        public const float FreezeSingleTime = 5, FreezeAllTime = 2;
+        public const int AllRivals = -1;
         public const float FoodRespawn = 3, PowerRespawn = 20, InputTimeout = .4f;
         // Cuenta regresiva antes de cada ronda (la cámara la usa para mostrar la cocina y acercarse al ratón).
         public const float CountdownTime = 3;
@@ -48,9 +50,12 @@ namespace Ratones.Basic
         public Power Inventory;
         public bool Has(Power power) { return (Inventory & power) == power; }
         public int LastInputSequence;
+        // Contadores confirmados por el anfitrión: recogidas y respuesta a órdenes de poderes.
+        public int Pickups, LastPowerRequest;
         // Solo el servidor mantiene estas entradas; no acepta posiciones del cliente.
         public float InputX, InputZ, InputAge;
         public bool WantsSpeed, WantsFreeze;
+        public int FreezeTarget = Rules.AllRivals;
         public bool Remote;
         public int LastQueuedSequence;
         public float InputCredit;
