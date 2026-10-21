@@ -776,7 +776,8 @@ namespace Ratones.Basic.Editor
             if (text == null) return;
             if (text.transform.parent != podium) Undo.SetTransformParent(text.transform, podium, "Puesto");
             Layout(text.transform, BottomCenter, new Vector2(0, y), new Vector2(220, 30));
-            Style(text, font, size, Dark, TextAnchor.MiddleCenter);
+            // Blanco: va sobre la pared gris de FONDO_PODIO.
+            Style(text, font, size, Color.white, TextAnchor.MiddleCenter);
         }
         static T At<T>(T[] items, int i) where T : Object { return items != null && i < items.Length ? items[i] : null; }
 
