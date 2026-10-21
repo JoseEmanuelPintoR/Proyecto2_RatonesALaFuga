@@ -22,6 +22,8 @@ namespace Ratones.Basic.Editor
             Material blocks = LoadMaterial("Borde",new Color(.38f,.38f,.38f));
             ArenaView view = ArenaView.Create(floor,blocks,SaveMesh);
             Undo.RegisterCreatedObjectUndo(view.gameObject,"Preparar rampas y obstáculos");
+            // Los obstáculos nuevos son cubos: se les vuelve a poner la isla con mantel.
+            ModelTools.Islands(scene);
             Selection.activeGameObject=view.gameObject;
             EditorSceneManager.MarkSceneDirty(scene); AssetDatabase.SaveAssets();
             Debug.Log("Listo: 4 rampas, 2 plataformas y 6 obstáculos. Guarda Juego con Ctrl+S. Para cambiar posiciones o tamaños, edita ArenaLayout.cs y vuelve a preparar el mapa.");

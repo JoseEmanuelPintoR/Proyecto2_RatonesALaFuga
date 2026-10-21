@@ -227,7 +227,7 @@ namespace Ratones.Basic.Editor
             if (lobby.CodeText != null)
             {
                 Layout(lobby.CodeText.transform, TopCenter, new Vector2(0, -155), new Vector2(600, 50));
-                Style(lobby.CodeText, regular, 30, Dark, TextAnchor.MiddleCenter);
+                Style(lobby.CodeText, regular, 30, Color.white, TextAnchor.MiddleCenter);
             }
             // Tarjetas un poco más abajo para que no las tape el código.
             float[] slotX = { -435, -145, 145, 435 };
@@ -541,12 +541,16 @@ namespace Ratones.Basic.Editor
             if (game.Inventory != null)
             {
                 Layout(game.Inventory.transform, Center, Vector2.zero, new Vector2(900, 120));
-                Style(game.Inventory, bold, 64, new Color(.12f, .12f, .12f), TextAnchor.MiddleCenter);
+                // Crema con borde café, como el título de "¿Salir de la partida?" de antes.
+                Style(game.Inventory, bold, 64, Cream, TextAnchor.MiddleCenter);
+                Outline outline = game.Inventory.GetComponent<Outline>() ?? Undo.AddComponent<Outline>(game.Inventory.gameObject);
+                Undo.RecordObject(outline, "Borde detenido"); outline.effectColor = Dark; outline.effectDistance = new Vector2(4, -4);
                 Undo.RecordObject(game.Inventory, "Aviso detenido"); game.Inventory.raycastTarget = false;
             }
         }
-        // "¿Salir de la partida?": marco de madera (MARCO_CONFIGURACION sin su título), el título sobre la pestaña
-        // de cuadros y los dos botones como píldoras amarillas de queso.
+        // "¿Salir de la partida?": marco de madera (MARCO_CONFIGURACION con la píldora del título en blanco), el título
+        // café sobre la píldora como "CONFIGURACIÓN" y los dos botones como píldoras amarillas de queso.
+        // El selector de trampa usa el mismo marco y su título va igual.
         static readonly Color Cheese = new Color(1, .78f, .25f);
         static void ExitDialog(GameUI game)
         {
@@ -563,12 +567,12 @@ namespace Ratones.Basic.Editor
             }
             if (title != null)
             {
-                // La pestaña ocupa el 54 % del ancho del marco, a 50 px (de 470) del borde superior.
+                // La píldora ocupa el 52 % del ancho del marco, centrada a 49 px (de 470) del borde superior.
                 Layout(title.transform, TopCenter, new Vector2(0, -39), new Vector2(340, 50));
-                Style(title, bold, 24, Cream, TextAnchor.MiddleCenter);
-                Outline outline = title.GetComponent<Outline>() ?? Undo.AddComponent<Outline>(title.gameObject);
-                Undo.RecordObject(outline, "Borde título"); outline.effectColor = Dark; outline.effectDistance = new Vector2(2, -2);
+                Style(title, bold, 24, Dark, TextAnchor.MiddleCenter);
+                RemoveOutline(title);
             }
+            if (game.FreezePicker != null) FreezePicker(game.FreezePicker);
             if (message != null)
             {
                 Layout(message.transform, Center, new Vector2(0, 20), new Vector2(540, 60));
@@ -585,6 +589,28 @@ namespace Ratones.Basic.Editor
                 Text label = button.GetComponentInChildren<Text>(true);
                 if (label != null) { Show(label.gameObject); Layout(label.transform, Center, Vector2.zero, new Vector2(220, 56)); Style(label, bold, 24, Dark, TextAnchor.MiddleCenter); }
             }
+        }
+        // Selector de trampa: en un panel de 600 px de alto la píldora del título termina a unos 120 px del borde,
+        // así que la indicación va debajo de ella y los botones bajan detrás (el último queda sobre el borde de cuadros).
+        static void FreezePicker(FreezeTargetPicker picker)
+        {
+            if (picker.Panel != null) Layout(picker.Panel, Center, Vector2.zero, new Vector2(600, 600));
+            if (picker.Title != null)
+            {
+                Layout(picker.Title, TopCenter, new Vector2(0, -62), new Vector2(340, 50));
+                Style(picker.Title, bold, 28, Dark, TextAnchor.MiddleCenter); RemoveOutline(picker.Title);
+            }
+            if (picker.Hint != null) Layout(picker.Hint, TopCenter, new Vector2(0, -158), new Vector2(500, 52));
+            float y = -218;
+            foreach (Button button in picker.RivalButtons ?? new Button[0])
+                if (button != null) { Layout(button, TopCenter, new Vector2(0, y), new Vector2(484, 60)); y -= 66; }
+            if (picker.AllButton != null) Layout(picker.AllButton, TopCenter, new Vector2(0, -422), new Vector2(484, 60));
+            if (picker.CancelButton != null) Layout(picker.CancelButton, TopCenter, new Vector2(0, -494), new Vector2(484, 60));
+        }
+        static void RemoveOutline(Text text)
+        {
+            Outline outline = text.GetComponent<Outline>();
+            if (outline != null) Undo.DestroyObjectImmediate(outline);
         }
         // Joystick abajo a la izquierda: base redonda y el queso como perilla (sin las flechas de antes).
         static void Stick(GameUI game)

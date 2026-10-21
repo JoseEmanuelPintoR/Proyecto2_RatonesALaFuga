@@ -358,10 +358,12 @@ namespace Ratones.Basic.Editor
                 "Cocina/ZonaDeJuego (cuadro rosado) y usa Ratones/Ajustar cocina a la zona de juego. Guarda con Ctrl+S.");
         }
 
-        // Texturas del juego: madera en el piso jugable (Plano100x100) y en plataformas y rampas (Suelo),
-        // mármol en los bloques y los límites (Borde). Se repiten cada MetrosMadera / MetrosMarmol metros.
+        // Texturas del juego: ajedrez en el piso jugable (Plano100x100), la madera de la mesa (sin mantel) en las
+        // plataformas y rampas (Suelo) y mármol en los límites (Borde); los obstáculos son islas con mantel (Preparar islas).
+        // PisoAjedrez.png es "Arte/textura piso.png" recortada a 8 x 8 casillas (la original trae 9 y al repetirse
+        // quedaban dos casillas negras juntas): con 20 m por repetición cada casilla mide 2.5 m (el ratón mide 2 m).
         const string Texturas = "Assets/Ratones/Arte/Texturas/";
-        const float MetrosMadera = 8, MetrosMarmol = 6;
+        const float MetrosAjedrez = 20, MetrosMarmol = 6;
         [MenuItem("Ratones/Aplicar texturas del piso")]
         public static void FloorTexturesMenu()
         {
@@ -370,21 +372,139 @@ namespace Ratones.Basic.Editor
             if (scene.name != "Juego") { Debug.LogWarning("Abre la escena Juego antes de aplicar las texturas."); return; }
             FloorTextures(scene);
             EditorSceneManager.MarkSceneDirty(scene); AssetDatabase.SaveAssets();
-            Debug.Log("Listo: piso de madera y bloques de mármol. Guarda Juego con Ctrl+S.");
+            Debug.Log("Listo: piso de ajedrez, rampas con la madera de la mesa y límites de mármol. Guarda Juego con Ctrl+S.");
         }
         static void FloorTextures(Scene scene)
         {
-            Texture2D wood = TiledTexture(Texturas + "PisoMadera.png"), marble = TiledTexture(Texturas + "Marmol.png");
-            if (wood == null || marble == null) { Debug.LogError("Faltan PisoMadera.png o Marmol.png en " + Texturas); return; }
+            Texture2D checker = TiledTexture(Texturas + "PisoAjedrez.png"), marble = TiledTexture(Texturas + "Marmol.png");
+            Texture2D tableWood = TiledTexture(IslaTexturas[0]);
+            if (checker == null || tableWood == null || marble == null) { Debug.LogError("Faltan PisoAjedrez.png o Marmol.png en " + Texturas + " o " + IslaTexturas[0]); return; }
             // Cada cara de los cubos y rampas va de 0 a 1 en UV: el piso mide 100 m y las caras de los bloques unos 6–12 m.
-            Material floorMaterial = TiledMaterial("PisoMadera", wood, Rules.ArenaSize / MetrosMadera);
-            TiledMaterial("Suelo", wood, 12 / MetrosMadera);
+            Material floorMaterial = TiledMaterial("PisoAjedrez", checker, Rules.ArenaSize / MetrosAjedrez);
+            TiledMaterial("Suelo", tableWood, 1);
             TiledMaterial("Borde", marble, 8 / MetrosMarmol);
             Transform plane = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<Transform>(true)).FirstOrDefault(t => t.name == "Plano100x100");
             MeshRenderer floor = plane != null ? plane.GetComponent<MeshRenderer>() : null;
-            if (floor == null) { Debug.LogWarning("No se encontró Plano100x100 para ponerle la madera."); return; }
-            Undo.RecordObject(floor, "Piso de madera");
+            if (floor == null) { Debug.LogWarning("No se encontró Plano100x100 para ponerle el piso."); return; }
+            Undo.RecordObject(floor, "Piso de ajedrez");
             floor.enabled = true; floor.sharedMaterial = floorMaterial;
+        }
+
+        // Islas: la mesa con mantel (mesa/isla_mantel.fbx) en lugar del cubo de cada obstáculo, ajustada a su caja
+        // (ancho x alto x fondo). Las colisiones del juego siguen saliendo de ArenaLayout.Blocks.
+        const string Isla = Models + "mesa/isla_mantel.fbx";
+        static readonly string[] IslaTexturas = { Models + "mesa/wood1.png", Models + "mesa/clothtable1.jpg" };
+        [MenuItem("Ratones/Preparar islas")]
+        public static void PrepareIslandsMenu()
+        {
+            if (Application.isPlaying) { Debug.LogWarning("Detén Play antes de preparar las islas."); return; }
+            Scene scene = SceneManager.GetActiveScene();
+            if (scene.name != "Juego") { Debug.LogWarning("Abre la escena Juego antes de preparar las islas."); return; }
+            if (!Islands(scene)) return;
+            EditorSceneManager.MarkSceneDirty(scene); AssetDatabase.SaveAssets();
+            Debug.Log("Listo: los obstáculos usan la isla con mantel. Guarda Juego con Ctrl+S.");
+        }
+        public static bool Islands(Scene scene)
+        {
+            var importer = AssetImporter.GetAtPath(Isla) as ModelImporter;
+            if (importer == null) { Debug.LogError("No se encontró " + Isla); return false; }
+            if (importer.importCameras || importer.importLights || importer.importAnimation || importer.animationType != ModelImporterAnimationType.None)
+            {
+                importer.importCameras = false; importer.importLights = false; importer.importAnimation = false;
+                importer.animationType = ModelImporterAnimationType.None; importer.SaveAndReimport();
+            }
+            Transform[] all = scene.GetRootGameObjects().SelectMany(g => g.GetComponentsInChildren<Transform>(true)).ToArray();
+            Transform[] blocks = all.Where(t => Regex.IsMatch(t.name, @"^Obstaculo\d+$")).ToArray();
+            if (blocks.Length == 0) { Debug.LogWarning("No hay obstáculos: usa Ratones/Preparar rampas y obstáculos."); return false; }
+            // Quita las islas que hayan quedado fuera de los obstáculos y vuelve a mostrar su cubo.
+            foreach (Transform old in all.Where(t => t != null && t.name == "Isla" && t.parent != null && !blocks.Contains(t.parent)).ToArray())
+            {
+                var hidden = old.parent.GetComponent<MeshRenderer>();
+                if (hidden != null) { Undo.RecordObject(hidden, "Preparar islas"); hidden.enabled = true; }
+                Undo.DestroyObjectImmediate(old.gameObject);
+            }
+
+            var asset = AssetDatabase.LoadAssetAtPath<GameObject>(Isla);
+            Dictionary<string, Material> materials = null;
+            foreach (Transform block in blocks)
+            {
+                Transform previous = block.Find("Isla");
+                if (previous != null) Undo.DestroyObjectImmediate(previous.gameObject);
+                // Isla (sin giro, escala la caja) > Modelo (gira para que el lado largo de la mesa quede a lo largo del bloque).
+                var holder = new GameObject("Isla").transform;
+                Undo.RegisterCreatedObjectUndo(holder.gameObject, "Preparar islas");
+                holder.SetParent(block, false);
+                var model = (GameObject)PrefabUtility.InstantiatePrefab(asset);
+                model.name = "Modelo"; model.transform.SetParent(holder, false);
+
+                Renderer[] renderers = model.GetComponentsInChildren<Renderer>();
+                if (materials == null) materials = IslandMaterials(renderers);
+                foreach (Renderer r in renderers)
+                {
+                    Material[] shared = r.sharedMaterials;
+                    for (int i = 0; i < shared.Length; i++)
+                    { Material m; if (shared[i] != null && materials.TryGetValue(shared[i].name, out m)) shared[i] = m; }
+                    r.sharedMaterials = shared;
+                }
+                FitToCube(block, holder, model.transform, renderers);
+                var cube = block.GetComponent<MeshRenderer>();
+                if (cube != null) { Undo.RecordObject(cube, "Preparar islas"); cube.enabled = false; }
+            }
+            return true;
+        }
+        // Un material Standard por cada material del FBX con la textura que le encontró el importador (madera o mantel);
+        // si alguno no la trae, se le da la de IslaTexturas que nadie usa.
+        static Dictionary<string, Material> IslandMaterials(Renderer[] renderers)
+        {
+            Texture2D[] files = IslaTexturas.Select(path => LoadTexture(path, TextureImporterType.Default, true, 2048)).ToArray();
+            Material[] sources = renderers.SelectMany(r => r.sharedMaterials).Where(m => m != null).GroupBy(m => m.name).Select(g => g.First()).ToArray();
+            Texture[] found = sources.Select(s => s.HasProperty("_MainTex") ? s.mainTexture : null).ToArray();
+            var materials = new Dictionary<string, Material>();
+            for (int i = 0; i < sources.Length; i++)
+            {
+                Texture texture = found[i] ?? files.FirstOrDefault(f => f != null && !found.Contains(f));
+                if (found[i] == null) found[i] = texture;
+                string path = "Assets/Ratones/Materiales/Isla_" + Clean(sources[i].name).Trim('_') + ".mat";
+                Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (material == null) { material = new Material(Shader.Find("Standard")); AssetDatabase.CreateAsset(material, path); }
+                material.shader = Shader.Find("Standard");
+                material.color = Color.white; material.mainTexture = texture;
+                if (sources[i].HasProperty("_MainTex")) { material.mainTextureScale = sources[i].mainTextureScale; material.mainTextureOffset = sources[i].mainTextureOffset; }
+                material.SetFloat("_Metallic", 0); material.SetFloat("_Glossiness", .15f);
+                if (texture == null) Debug.LogWarning("Isla: el material " + sources[i].name + " quedó sin textura; asígnasela en " + path);
+                else Debug.Log("Isla: " + sources[i].name + " usa " + texture.name);
+                EditorUtility.SetDirty(material);
+                materials[sources[i].name] = material;
+            }
+            return materials;
+        }
+        // El cubo del obstáculo ya tiene su escala (ancho, alto, fondo), así que en su espacio la caja va de -0.5 a 0.5.
+        static void FitToCube(Transform cube, Transform holder, Transform model, Renderer[] renderers)
+        {
+            Bounds bounds = LocalBounds(cube, renderers);
+            Vector3 scale = cube.lossyScale;
+            if (bounds.size.z * scale.z > bounds.size.x * scale.x != scale.z > scale.x)
+            { model.localRotation = Quaternion.Euler(0, 90, 0) * model.localRotation; bounds = LocalBounds(cube, renderers); }
+            if (bounds.size.x <= 0 || bounds.size.y <= 0 || bounds.size.z <= 0) { Debug.LogWarning("La isla no tiene tamaño."); return; }
+            holder.localScale = new Vector3(1 / bounds.size.x, 1 / bounds.size.y, 1 / bounds.size.z);
+            bounds = LocalBounds(cube, renderers);
+            holder.localPosition -= new Vector3(bounds.center.x, bounds.min.y + .5f, bounds.center.z);
+        }
+        // Caja de las mallas medida en el espacio de "space" (no la del mundo, que crece al girar).
+        static Bounds LocalBounds(Transform space, Renderer[] renderers)
+        {
+            Vector3[] points = renderers.Select(r => r.GetComponent<MeshFilter>()).Where(f => f != null && f.sharedMesh != null)
+                .SelectMany(f =>
+                {
+                    Bounds mesh = f.sharedMesh.bounds;
+                    Matrix4x4 toSpace = space.worldToLocalMatrix * f.transform.localToWorldMatrix;
+                    return Enumerable.Range(0, 8).Select(i => toSpace.MultiplyPoint3x4(mesh.center + Vector3.Scale(mesh.extents,
+                        new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1))));
+                }).ToArray();
+            if (points.Length == 0) return new Bounds();
+            var bounds = new Bounds(points[0], Vector3.zero);
+            foreach (Vector3 p in points) bounds.Encapsulate(p);
+            return bounds;
         }
         static Texture2D TiledTexture(string path)
         {

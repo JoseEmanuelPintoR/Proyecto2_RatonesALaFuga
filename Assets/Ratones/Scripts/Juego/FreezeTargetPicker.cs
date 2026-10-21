@@ -89,24 +89,21 @@ namespace Ratones.Basic
 
             picker.Panel = Rect("Panel", root);
             picker.Panel.anchorMin = picker.Panel.anchorMax = new Vector2(.5f, .5f);
-            picker.Panel.sizeDelta = new Vector2(600, 568);
+            picker.Panel.sizeDelta = new Vector2(600, 600);
             Image background = picker.Panel.gameObject.AddComponent<Image>();
             CopyImage(background, panelStyle, new Color(.87f, .79f, .61f));
-            picker.Title = Label("Titulo", picker.Panel, font, "DETENER", 28, -60, 340, 50);
-            picker.Title.color = new Color(1, .95f, .85f);
-            Outline titleOutline = picker.Title.gameObject.AddComponent<Outline>();
-            titleOutline.effectColor = new Color(.24f, .12f, .05f); titleOutline.effectDistance = new Vector2(2, -2);
-            picker.Hint = Label("Indicacion", picker.Panel, font, "Elige a quién detener.", 20, -125, 500, 52);
+            picker.Title = Label("Titulo", picker.Panel, font, "DETENER", 28, -62, 340, 50);
+            picker.Hint = Label("Indicacion", picker.Panel, font, "Elige a quién detener.", 20, -158, 500, 52);
             picker.RivalButtons = new Button[Rules.MaxPlayers - 1];
             picker.RivalLabels = new Text[Rules.MaxPlayers - 1];
             for (int i = 0; i < picker.RivalButtons.Length; i++)
             {
                 picker.RivalButtons[i] = MakeButton("Rival" + (i + 1), picker.Panel, font, buttonStyle,
-                    "Rival " + (i + 1) + " — 5 s", -195 - i * 70, out picker.RivalLabels[i]);
+                    "Rival " + (i + 1) + " — 5 s", -218 - i * 66, out picker.RivalLabels[i]);
             }
             Text unused;
-            picker.AllButton = MakeButton("Todos", picker.Panel, font, buttonStyle, "Todos los rivales — 2 s", -411, out unused);
-            picker.CancelButton = MakeButton("Cancelar", picker.Panel, font, buttonStyle, "Cancelar", -487, out unused);
+            picker.AllButton = MakeButton("Todos", picker.Panel, font, buttonStyle, "Todos los rivales — 2 s", -422, out unused);
+            picker.CancelButton = MakeButton("Cancelar", picker.Panel, font, buttonStyle, "Cancelar", -494, out unused);
             return picker;
         }
         static RectTransform Rect(string name, Transform parent)
