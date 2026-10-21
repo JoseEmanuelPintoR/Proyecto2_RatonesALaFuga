@@ -70,6 +70,7 @@ namespace Ratones.Basic
             {
                 p.Position = Spawn(used, 12); used.Add(p.Position);
                 p.Score = p.Collected = 0; p.Inventory = Power.None;
+                p.Pickups = p.LastPowerRequest = 0; p.FreezeTarget = Rules.AllRivals;
                 p.BoostLeft = p.FreezeLeft = p.InputX = p.InputZ = p.InputAge = p.Angle = 0;
                 p.WantsSpeed = p.WantsFreeze = false;
                 p.LastInputSequence = p.LastQueuedSequence = 0; p.InputCredit = 0; p.PendingInputs.Clear();
@@ -145,12 +146,28 @@ namespace Ratones.Basic
             p.Position = ArenaLayout.Move(p.Position,x*step,z*step);
             if (Math.Abs(x)+Math.Abs(z)>.01f) p.Angle=(float)(Math.Atan2(x,z)*180/Math.PI);
         }
-        public void Use(int id, Power power)
+        // El cliente elige el objetivo, nunca la duración ni la identidad de quien lanza.
+        public void RequestPower(int id, int round, int sequence, Power power, int targetId)
         {
             Player p = State.Player(id);
-            if (p == null || !p.Connected || State.Phase != Phase.Playing || !p.Has(power) || p.FreezeLeft > 0) return;
-            if (power == Power.Speed) p.WantsSpeed = true;
-            else if (power == Power.Freeze) p.WantsFreeze = true;
+            if (p == null || !p.Connected || round != State.Round || sequence <= p.LastPowerRequest) return;
+            p.LastPowerRequest = sequence; // También confirma rechazos para desbloquear la interfaz.
+            Use(id, power, targetId);
+        }
+        public bool Use(int id, Power power, int targetId = Rules.AllRivals)
+        {
+            Player p = State.Player(id);
+            if (p == null || !p.Connected || State.Phase != Phase.Playing || !p.Has(power) || p.FreezeLeft > 0) return false;
+            if (power == Power.Speed && !p.WantsSpeed && p.BoostLeft <= 0)
+            { p.WantsSpeed = true; return true; }
+            if (power != Power.Freeze || p.WantsFreeze || !ValidFreezeTarget(id, targetId)) return false;
+            p.FreezeTarget = targetId; p.WantsFreeze = true; return true;
+        }
+        bool ValidFreezeTarget(int sender, int target)
+        {
+            if (target == Rules.AllRivals) return State.Players.Any(p => p.Connected && p.Id != sender);
+            Player rival = State.Player(target);
+            return rival != null && rival.Connected && rival.Id != sender;
         }
         public void Tick(float dt)
         {
@@ -174,11 +191,13 @@ namespace Ratones.Basic
                 Player p = active[(i + turn) % active.Count];
                 if (p.FreezeLeft <= 0 && p.WantsSpeed && p.Has(Power.Speed) && p.BoostLeft <= 0)
                 { p.Inventory &= ~Power.Speed; p.BoostLeft = Rules.BoostTime; }
-                if (p.FreezeLeft <= 0 && p.WantsFreeze && p.Has(Power.Freeze))
+                if (p.FreezeLeft <= 0 && p.WantsFreeze && p.Has(Power.Freeze) && ValidFreezeTarget(p.Id, p.FreezeTarget))
                 {
                     p.Inventory &= ~Power.Freeze;
-                    // La trampa afecta a TODOS los rivales; no hay rango ni selección.
-                    foreach (Player q in active) if (q.Id != p.Id) q.FreezeLeft = Rules.FreezeTime;
+                    float time = p.FreezeTarget == Rules.AllRivals ? Rules.FreezeAllTime : Rules.FreezeSingleTime;
+                    foreach (Player q in active)
+                        if (q.Id != p.Id && (p.FreezeTarget == Rules.AllRivals || q.Id == p.FreezeTarget))
+                            q.FreezeLeft = Math.Max(q.FreezeLeft, time);
                 }
                 p.WantsSpeed = p.WantsFreeze = false;
             }
@@ -215,6 +234,7 @@ namespace Ratones.Basic
                 if (collector == null) continue;
                 item.Active = false; item.RespawnLeft = Rules.Food(item.Kind) ? Rules.FoodRespawn : Rules.PowerRespawn;
                 State.WorldRevision++;
+                collector.Pickups++;
                 if (Rules.Food(item.Kind)) { collector.Collected++; collector.Score += Rules.Points(item.Kind); }
                 else collector.Inventory |= item.Kind == ItemKind.Chocolate ? Power.Speed : Power.Freeze;
             }

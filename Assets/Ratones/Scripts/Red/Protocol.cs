@@ -6,7 +6,7 @@ namespace Ratones.Basic
 {
     public static class Protocol
     {
-        public const string Version = "RF4";
+        public const string Version = "RF5";
         public static string Encode(string text) { return Convert.ToBase64String(Encoding.UTF8.GetBytes(text ?? "")); }
         public static string Decode(string text) { return Encoding.UTF8.GetString(Convert.FromBase64String(text)); }
         public static string Num(float value) { return value.ToString("0.###", CultureInfo.InvariantCulture); }
@@ -29,7 +29,8 @@ namespace Ratones.Basic
                     .Append(Encode(p.Name)).Append(',').Append(p.Connected ? 1 : 0).Append(',')
                     .Append(Num(p.Position.X)).Append(',').Append(Num(p.Position.Z)).Append(',').Append(Num(p.Angle)).Append(',')
                     .Append(p.Score).Append(',').Append(p.Collected).Append(',').Append((int)p.Inventory).Append(',')
-                    .Append(Num(p.BoostLeft)).Append(',').Append(Num(p.FreezeLeft)).Append(',').Append(p.LastInputSequence).Append(';');
+                    .Append(Num(p.BoostLeft)).Append(',').Append(Num(p.FreezeLeft)).Append(',').Append(p.LastInputSequence).Append(',')
+                    .Append(p.Pickups).Append(',').Append(p.LastPowerRequest).Append(';');
             s.Append('|').Append(state.WorldRevision).Append('|');
             if (!includeItems) s.Append('~');
             else foreach (Item i in state.Items)
@@ -49,13 +50,14 @@ namespace Ratones.Basic
             {
                 if (row.Length == 0) continue;
                 string[] p = row.Split(',');
-                if (p.Length != 15 || state.Players.Count >= 4) throw new FormatException("Jugador incorrecto.");
+                if (p.Length != 17 || state.Players.Count >= 4) throw new FormatException("Jugador incorrecto.");
                 int slot = int.Parse(p[1]), inv = int.Parse(p[11]);
                 if (slot < 0 || slot > 3 || inv < 0 || inv > 3) throw new FormatException("Estado de jugador incorrecto.");
                 state.Players.Add(new Player { Id = int.Parse(p[0]), Slot = slot, KeyColor = Simulation.ColorIndex(int.Parse(p[2])),
                     AuraColor = Simulation.ColorIndex(int.Parse(p[3])), Name = Decode(p[4]), Connected = p[5] == "1",
                     Position = new Position(Float(p[6]), Float(p[7])), Angle = Float(p[8]), Score = int.Parse(p[9]),
-                    Collected = int.Parse(p[10]), Inventory = (Power)inv, BoostLeft = Float(p[12]), FreezeLeft = Float(p[13]), LastInputSequence = int.Parse(p[14]) });
+                    Collected = int.Parse(p[10]), Inventory = (Power)inv, BoostLeft = Float(p[12]), FreezeLeft = Float(p[13]),
+                    LastInputSequence = int.Parse(p[14]), Pickups = int.Parse(p[15]), LastPowerRequest = int.Parse(p[16]) });
             }
             if (a[10] == "~")
             {
